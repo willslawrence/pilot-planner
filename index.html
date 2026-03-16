@@ -1,0 +1,1523 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Pilot Availability Planner V2 — THC H125</title>
+<style>
+:root {
+  --bg: #0f1123;
+  --surface: #1a1d35;
+  --surface2: #232847;
+  --border: #2d3258;
+  --text: #e0e0e0;
+  --muted: #8888aa;
+  --accent: #ff5a36;
+  --teal: #009688;
+  --green: #43a047;
+  --purple: #9c27b0;
+  --blue: #1e88e5;
+  --orange: #FF9800;
+  --red: #ef5350;
+  --yellow: #ffd600;
+  --gray: #555;
+  --week-shade: rgba(255,255,255,.04);
+  --sun-border-color: rgba(255,255,255,.08);
+  --duty-off-bg: var(--gray);
+  --abar-border: rgba(255,255,255,.2);
+  --pa-block-alpha: CC;
+  --mbar-border: rgba(255,255,255,.15);
+  --ghost-filter: none;
+  --month-alt: rgba(255,255,255,.025);
+}
+html.light {
+  --bg: #f5f5f5;
+  --surface: #ffffff;
+  --surface2: #e8e8e8;
+  --border: #d0d0d0;
+  --text: #1a1a1a;
+  --muted: #666666;
+  --week-shade: rgba(0,0,0,.04);
+  --sun-border-color: rgba(0,0,0,.08);
+  --abar-border: rgba(0,0,0,.15);
+  --mbar-border: rgba(0,0,0,.12);
+  --month-alt: rgba(0,0,0,.03);
+}
+* { margin:0; padding:0; box-sizing:border-box; }
+body { font-family: system-ui,-apple-system,sans-serif; background:var(--bg); color:var(--text); height:100vh; overflow:hidden; display:flex; flex-direction:column; }
+
+.header { padding:8px 20px; display:flex; align-items:center; gap:14px; border-bottom:1px solid var(--border); flex-shrink:0; }
+.header h1 { font-size:17px; flex:1; }
+.ctrls { display:flex; align-items:center; gap:5px; }
+.ctrls input[type=date] { background:var(--surface); border:1px solid var(--border); color:var(--text); padding:4px 8px; border-radius:5px; font-size:11px; }
+.ctrls button { background:var(--surface2); border:1px solid var(--border); color:var(--text); padding:4px 10px; border-radius:5px; cursor:pointer; font-size:11px; font-weight:600; }
+.ctrls button:hover { border-color:var(--accent); }
+.theme-btn { font-size:16px!important; padding:4px 8px!important; line-height:1; }
+
+.main-scroll { flex:1; overflow:auto; position:relative; }
+.main-inner { position:relative; }
+
+.row { display:flex; align-items:stretch; }
+.rlabel { min-width:160px; width:160px; position:sticky; left:0; z-index:5; background:var(--bg); border-right:1px solid var(--border); display:flex; align-items:center; padding:0 8px; font-size:11px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+.rbars { flex:1; position:relative; }
+
+.mrow { display:flex; position:sticky; top:0; z-index:20; background:var(--bg); border-bottom:1px solid var(--border); }
+.mcell { text-align:center; font-size:10px; color:var(--muted); border-right:1px solid rgba(45,50,88,.4); display:flex; align-items:center; justify-content:center; height:22px; position:relative; flex-shrink:0; }
+
+.sec-row .rlabel { font-weight:700; font-size:10px; text-transform:uppercase; letter-spacing:.5px; border-bottom:1px solid var(--border); }
+.sec-row .rbars { border-bottom:1px solid var(--border); height:19px; }
+
+.m-row { min-height:27px; border-bottom:1px solid rgba(45,50,88,.25); background:rgba(255,255,255,.12); }
+html.light .m-row { background:#fff; }
+.m-row .rlabel { font-weight:600; font-size:11px; cursor:pointer; gap:4px; }
+.m-row .rlabel:hover { color:var(--accent); }
+.mbar { position:absolute; top:6px; bottom:6px; border-radius:4px; display:flex; align-items:center; padding:0 8px; font-size:10px; font-weight:600; color:#fff; overflow:hidden; white-space:nowrap; border:1px solid var(--mbar-border); cursor:grab; justify-content:center; }
+.mbar:active { cursor:grabbing; }
+.mbar-date { position:absolute; bottom:1px; font-size:9px; font-weight:600; opacity:.8; white-space:nowrap; }
+.mbar-start { left:6px; }
+.mbar-end { right:6px; }
+.mbar-name { font-size:10px; font-weight:700; z-index:1; }
+
+.h-row { min-height:27px; border-bottom:1px solid rgba(45,50,88,.15); background:rgba(255,255,255,.12); }
+html.light .h-row { background:#fff; }
+.h-row .rlabel { padding-left:20px; color:var(--muted); font-size:10px; }
+.h-row.drop-over { background:rgba(76,175,80,.08); }
+
+.abar { position:absolute; top:4px; height:19px; border-radius:4px; display:flex; align-items:center; justify-content:center; padding:0 4px; font-size:10px; font-weight:600; cursor:pointer; z-index:2; min-width:14px; overflow:visible; white-space:nowrap; color:#fff; border:1px solid var(--abar-border); opacity:1; }
+.abar:hover { filter:brightness(1.15); z-index:3; }
+.abar .ax { position:absolute; right:-8px; top:-8px; width:16px; height:16px; background:var(--red); color:#fff; border-radius:50%; display:none; align-items:center; justify-content:center; font-size:10px; line-height:1; cursor:pointer; border:2px solid var(--bg); }
+.abar:hover .ax { display:flex; }
+.abar-grip { position:absolute; top:0; bottom:0; width:6px; cursor:ew-resize; z-index:4; }
+.abar-grip-l { left:-2px; border-radius:4px 0 0 4px; }
+.abar-grip-r { right:-2px; border-radius:0 4px 4px 0; }
+.abar-grip:hover { background:rgba(255,255,255,.3); }
+.abar-date { position:absolute; bottom:1px; font-size:8px; font-weight:600; opacity:.8; white-space:nowrap; pointer-events:none; }
+.abar-date-l { left:4px; }
+.abar-date-r { right:4px; }
+.abar.offduty { opacity:.35; background-image:repeating-linear-gradient(45deg,transparent,transparent 3px,rgba(0,0,0,.25) 3px,rgba(0,0,0,.25) 6px); }
+.abar.overlap-warn { border:2px dashed var(--red)!important; }
+
+.separator { height:3px; background:linear-gradient(90deg,var(--accent),var(--purple),var(--blue)); margin:0; flex-shrink:0; }
+
+.p-row { min-height:21px; border-bottom:1px solid rgba(45,50,88,.15); cursor:grab; position:relative; }
+.p-row:active { cursor:grabbing; }
+.p-row.dragging { opacity:.3; }
+.p-row .rlabel { gap:4px; }
+.sdot { width:7px; height:7px; border-radius:50%; flex-shrink:0; }
+.duty-blk { position:absolute; top:1px; bottom:1px; overflow:hidden; cursor:pointer; display:flex; align-items:center; justify-content:center; border-radius:4px; }
+.rot-date { position:absolute; bottom:1px; font-size:10px; font-weight:700; color:#fff; opacity:.9; pointer-events:none; white-space:nowrap; text-shadow:0 1px 2px rgba(0,0,0,.5); }
+.rot-start { left:3px; }
+.rot-end { right:3px; }
+.rot-center { position:absolute; left:50%; top:50%; transform:translate(-50%,-50%); font-size:9px; font-weight:700; }
+.rot-center.warn { color:#ff4444; text-shadow:0 0 4px rgba(255,0,0,.5); }
+.duty-blk.on { opacity:.55; }
+.duty-blk.off { background:#F87171; opacity:.22; }
+.duty-blk.workover { opacity:.55; background-image:repeating-linear-gradient(45deg,transparent,transparent 4px,rgba(66,165,245,.4) 4px,rgba(66,165,245,.4) 8px); }
+
+.pa-block { position:absolute; top:7px; height:13px; border-radius:3px; display:flex; align-items:center; padding:0 4px; font-size:7px; font-weight:700; color:#fff; z-index:3; overflow:hidden; white-space:nowrap; text-overflow:ellipsis; border:1px solid rgba(255,255,255,.25); cursor:pointer; letter-spacing:.3px; }
+
+.week-shade { position:absolute; top:0; bottom:0; background:var(--week-shade); pointer-events:none; z-index:0; }
+.sun-border { position:absolute; top:0; bottom:0; width:2px; background:var(--sun-border-color); pointer-events:none; z-index:1; }
+.month-shade { position:absolute; top:0; bottom:0; background:var(--month-alt); pointer-events:none; z-index:0; }
+
+.cur { position:absolute; top:0; bottom:0; width:2px; background:var(--yellow); z-index:15; pointer-events:none; }
+.cur-lbl { position:absolute; z-index:16; font-size:9px; background:rgba(255,214,0,.9); color:#000; padding:1px 4px; border-radius:2px; pointer-events:none; white-space:nowrap; font-weight:600; bottom:2px; transform:translateX(3px); }
+.cur-drag { position:absolute; top:0; width:14px; height:100%; z-index:17; cursor:ew-resize; transform:translateX(-6px); }
+
+.handoff-svg { position:absolute; top:0; left:0; pointer-events:none; z-index:10; overflow:visible; }
+
+.legend { padding:5px 16px; border-top:1px solid var(--border); font-size:10px; color:var(--muted); display:flex; gap:12px; flex-wrap:wrap; flex-shrink:0; align-items:center; }
+.leg { display:flex; align-items:center; gap:3px; }
+.lsw { width:14px; height:8px; border-radius:2px; }
+
+.add-btn { color:var(--muted); font-size:11px; cursor:pointer; padding:6px 8px; }
+.add-btn:hover { color:var(--accent); }
+
+.pop { position:fixed; z-index:50; background:var(--surface); border:1px solid var(--border); border-radius:8px; padding:8px 10px; width:200px; box-shadow:0 4px 16px rgba(0,0,0,.5); }
+.pop label { display:block; font-size:9px; color:var(--muted); margin:3px 0 1px; }
+.pop input, .pop select { width:100%; background:var(--surface2); border:1px solid var(--border); color:var(--text); padding:3px 5px; border-radius:4px; font-size:10px; }
+.pop .pb { display:flex; gap:4px; margin-top:6px; }
+.pop button { flex:1; padding:4px; border-radius:4px; border:none; font-size:9px; font-weight:600; cursor:pointer; }
+.psave { background:var(--accent); color:#fff; }
+.pdel { background:var(--surface2); color:var(--red); border:1px solid rgba(239,83,80,.3)!important; }
+.pcancel { background:var(--surface2); color:var(--muted); border:1px solid var(--border)!important; }
+
+.ghost { position:fixed; pointer-events:none; z-index:100; padding:3px 10px; border-radius:5px; font-size:11px; font-weight:600; color:#fff; opacity:.85; }
+</style>
+</head>
+<body>
+
+<div class="header">
+  <h1>🚁 Pilot Availability Planner <span style="font-size:12px;opacity:.6;font-weight:400">V2.62</span></h1>
+  <div class="ctrls">
+    <button class="theme-btn" onclick="toggleTheme()" id="themeBtn" title="Toggle light/dark theme">🌙</button>
+    <button onclick="goToday()">Today</button>
+    <button onclick="shf(-7)">◀ Wk</button>
+    <input type="date" id="dp" onchange="setD(this.value)">
+    <button onclick="shf(7)">Wk ▶</button>
+    <button onclick="shf(-30)">◀ Mo</button>
+    <button onclick="shf(30)">Mo ▶</button>
+    <button onclick="if(confirm('Clear all pilot assignments?')){asgn={};saveData();render();}" title="Reset all assignments">🗑️ Reset</button>
+  </div>
+</div>
+
+<div class="main-scroll" id="mscroll">
+  <div class="main-inner" id="mpanel"></div>
+</div>
+
+<div class="legend">
+  <div class="leg"><input type="color" id="cc-uam" style="width:14px;height:14px;border:none;padding:0;cursor:pointer;border-radius:2px" onchange="PILOT_COLORS.uam=this.value;savePilotColors();render()"> UAM</div>
+  <div class="leg"><input type="color" id="cc-both" style="width:14px;height:14px;border:none;padding:0;cursor:pointer;border-radius:2px" onchange="PILOT_COLORS.both=this.value;savePilotColors();render()"> UAM + Survey</div>
+  <div class="leg"><input type="color" id="cc-survey" style="width:14px;height:14px;border:none;padding:0;cursor:pointer;border-radius:2px" onchange="PILOT_COLORS.survey=this.value;savePilotColors();render()"> Survey</div>
+  <div class="leg"><input type="color" id="cc-mg" style="width:14px;height:14px;border:none;padding:0;cursor:pointer;border-radius:2px" onchange="PILOT_COLORS.mg=this.value;savePilotColors();render()"> Management</div>
+  <div class="leg"><div class="lsw" style="background:var(--red)"></div> Rally</div>
+  <div class="leg"><div class="lsw" style="background:var(--gray)"></div> Off Rotation</div>
+  <div class="leg"><div class="lsw" style="background:var(--yellow)"></div> Cursor</div>
+  <div class="leg"><svg width="20" height="10"><path d="M0 8 Q10 0 20 8" stroke="var(--accent)" fill="none" stroke-width="2"/></svg> Handoff</div>
+  <span style="margin-left:auto;font-size:10px">Drag pilot → heli slot · Click mission label to edit · Click rotation bar to edit</span>
+</div>
+
+<script>
+// ====== DATA ======
+const PILOTS = [
+  {name:"Will Lawrence",quals:["UAM"],rot:[{s:"2026-01-01",e:"2026-12-31",st:"ON"}],ev:[{d:"2026-03-06",n:"AL"},{d:"2026-03-07",n:"AL"},{d:"2026-03-08",n:"AL"},{d:"2026-03-09",n:"AL"},{d:"2026-03-10",n:"AL"},{d:"2026-03-11",n:"AL"},{d:"2026-03-12",n:"AL"},{d:"2026-03-13",n:"AL"},{d:"2026-03-14",n:"AL"},{d:"2026-03-15",n:"AL"},{d:"2026-03-16",n:"AL"}],mg:1},
+  {name:"Nathan Piper",quals:["UAM"],rot:[{s:"2026-01-01",e:"2026-01-06",st:"ON"},{s:"2026-01-07",e:"2026-02-17",st:"OFF"},{s:"2026-02-18",e:"2026-03-31",st:"ON"},{s:"2026-04-01",e:"2026-05-12",st:"OFF"},{s:"2026-05-13",e:"2026-06-23",st:"ON"},{s:"2026-06-24",e:"2026-08-04",st:"OFF"},{s:"2026-08-05",e:"2026-09-15",st:"ON"},{s:"2026-09-16",e:"2026-10-27",st:"OFF"},{s:"2026-10-28",e:"2026-12-08",st:"WORKOVER"},{s:"2026-12-09",e:"2026-12-31",st:"OFF"}],ev:[]},
+  {name:"David Leipsig",quals:["UAM"],rot:[{s:"2026-01-01",e:"2026-01-06",st:"OFF"},{s:"2026-01-07",e:"2026-02-17",st:"ON"},{s:"2026-02-18",e:"2026-03-31",st:"OFF"},{s:"2026-04-01",e:"2026-05-12",st:"ON"},{s:"2026-05-13",e:"2026-06-23",st:"OFF"},{s:"2026-06-24",e:"2026-08-04",st:"ON"},{s:"2026-08-05",e:"2026-09-15",st:"OFF"},{s:"2026-09-16",e:"2026-10-27",st:"WORKOVER"},{s:"2026-10-28",e:"2026-12-08",st:"OFF"},{s:"2026-12-09",e:"2026-12-31",st:"WORKOVER"}],ev:[]},
+  {name:"Lisa le Roux",quals:["UAM"],rot:[{s:"2026-01-01",e:"2026-01-27",st:"OFF"},{s:"2026-01-28",e:"2026-03-10",st:"ON"},{s:"2026-03-11",e:"2026-04-21",st:"OFF"},{s:"2026-04-22",e:"2026-06-02",st:"ON"},{s:"2026-06-03",e:"2026-07-14",st:"OFF"},{s:"2026-07-15",e:"2026-08-25",st:"ON"},{s:"2026-08-26",e:"2026-10-06",st:"OFF"},{s:"2026-10-07",e:"2026-11-17",st:"WORKOVER"},{s:"2026-11-18",e:"2026-12-29",st:"OFF"},{s:"2026-12-30",e:"2026-12-31",st:"WORKOVER"}],ev:[]},
+  {name:"Ivona Redlinska",quals:["UAM"],rot:[{s:"2026-01-01",e:"2026-01-11",st:"ON"},{s:"2026-01-12",e:"2026-03-10",st:"OFF"},{s:"2026-03-11",e:"2026-04-13",st:"ON"},{s:"2026-04-14",e:"2026-06-02",st:"OFF"},{s:"2026-06-03",e:"2026-07-14",st:"ON"},{s:"2026-07-15",e:"2026-08-25",st:"OFF"},{s:"2026-08-26",e:"2026-10-06",st:"WORKOVER"},{s:"2026-10-07",e:"2026-11-17",st:"OFF"},{s:"2026-11-18",e:"2026-12-29",st:"WORKOVER"},{s:"2026-12-30",e:"2026-12-31",st:"OFF"}],ev:[]},
+  {name:"Lindsay Pentz",quals:["UAM"],rot:[{s:"2026-01-01",e:"2026-01-20",st:"ON"},{s:"2026-01-21",e:"2026-03-03",st:"OFF"},{s:"2026-03-04",e:"2026-04-14",st:"ON"},{s:"2026-04-15",e:"2026-05-26",st:"OFF"},{s:"2026-05-27",e:"2026-07-07",st:"ON"},{s:"2026-07-08",e:"2026-08-18",st:"OFF"},{s:"2026-08-19",e:"2026-09-29",st:"WORKOVER"},{s:"2026-09-30",e:"2026-11-10",st:"OFF"},{s:"2026-11-11",e:"2026-12-22",st:"WORKOVER"},{s:"2026-12-23",e:"2026-12-31",st:"OFF"}],ev:[]},
+  {name:"Stephan Mayer",quals:["UAM"],rot:[{s:"2026-01-01",e:"2026-02-08",st:"ON"},{s:"2026-02-09",e:"2026-03-20",st:"OFF"},{s:"2026-03-21",e:"2026-05-01",st:"ON"},{s:"2026-05-02",e:"2026-06-12",st:"OFF"},{s:"2026-06-13",e:"2026-06-26",st:"ON"},{s:"2026-06-27",e:"2026-09-04",st:"OFF"},{s:"2026-09-05",e:"2026-10-16",st:"ON"},{s:"2026-10-17",e:"2026-11-27",st:"OFF"},{s:"2026-11-28",e:"2026-12-31",st:"ON"}],ev:[]},
+  {name:"Rohit Kaundinya",quals:["UAM"],rot:[{s:"2026-01-01",e:"2026-01-20",st:"OFF"},{s:"2026-01-21",e:"2026-03-03",st:"ON"},{s:"2026-03-04",e:"2026-04-14",st:"OFF"},{s:"2026-04-15",e:"2026-05-26",st:"ON"},{s:"2026-05-27",e:"2026-07-07",st:"OFF"},{s:"2026-07-08",e:"2026-08-18",st:"ON"},{s:"2026-08-19",e:"2026-09-29",st:"OFF"},{s:"2026-09-30",e:"2026-11-10",st:"WORKOVER"},{s:"2026-11-11",e:"2026-12-22",st:"OFF"},{s:"2026-12-23",e:"2026-12-31",st:"WORKOVER"}],ev:[]},
+  {name:"David Schicht",quals:["UAM","Survey"],rot:[{s:"2026-01-01",e:"2026-01-26",st:"OFF"},{s:"2026-01-27",e:"2026-03-09",st:"ON"},{s:"2026-03-10",e:"2026-04-20",st:"OFF"},{s:"2026-04-21",e:"2026-06-01",st:"ON"},{s:"2026-06-02",e:"2026-07-13",st:"OFF"},{s:"2026-07-14",e:"2026-08-24",st:"ON"},{s:"2026-08-25",e:"2026-10-05",st:"OFF"},{s:"2026-10-06",e:"2026-11-16",st:"WORKOVER"},{s:"2026-11-17",e:"2026-12-28",st:"OFF"},{s:"2026-12-29",e:"2026-12-31",st:"WORKOVER"}],ev:[]},
+  {name:"Kevin Allen",quals:["UAM","Survey"],rot:[{s:"2026-01-01",e:"2026-01-26",st:"ON"},{s:"2026-01-27",e:"2026-03-09",st:"OFF"},{s:"2026-03-10",e:"2026-04-20",st:"ON"},{s:"2026-04-21",e:"2026-06-01",st:"OFF"},{s:"2026-06-02",e:"2026-07-13",st:"ON"},{s:"2026-07-14",e:"2026-08-24",st:"OFF"},{s:"2026-08-25",e:"2026-10-05",st:"WORKOVER"},{s:"2026-10-06",e:"2026-11-16",st:"OFF"},{s:"2026-11-17",e:"2026-12-28",st:"WORKOVER"},{s:"2026-12-29",e:"2026-12-31",st:"OFF"}],ev:[]},
+  {name:"Marius Hertz",quals:["Survey"],rot:[{s:"2026-01-01",e:"2026-01-29",st:"ON"},{s:"2026-01-30",e:"2026-03-12",st:"OFF"},{s:"2026-03-13",e:"2026-04-23",st:"ON"},{s:"2026-04-24",e:"2026-06-04",st:"OFF"},{s:"2026-06-05",e:"2026-07-16",st:"ON"},{s:"2026-07-17",e:"2026-08-27",st:"OFF"},{s:"2026-08-28",e:"2026-10-08",st:"WORKOVER"},{s:"2026-10-09",e:"2026-11-19",st:"OFF"},{s:"2026-11-20",e:"2026-12-31",st:"WORKOVER"}],ev:[]},
+  {name:"Dan Munteanu",quals:["Survey"],rot:[{s:"2026-01-01",e:"2026-01-29",st:"OFF"},{s:"2026-01-30",e:"2026-03-12",st:"ON"},{s:"2026-03-13",e:"2026-04-23",st:"OFF"},{s:"2026-04-24",e:"2026-06-04",st:"ON"},{s:"2026-06-05",e:"2026-07-16",st:"OFF"},{s:"2026-07-17",e:"2026-08-27",st:"ON"},{s:"2026-08-28",e:"2026-10-08",st:"OFF"},{s:"2026-10-09",e:"2026-11-19",st:"WORKOVER"},{s:"2026-11-20",e:"2026-12-31",st:"OFF"}],ev:[]},
+  {name:"Julio Bonet",quals:["Survey"],rot:[{s:"2026-01-01",e:"2026-01-18",st:"OFF"},{s:"2026-01-19",e:"2026-03-01",st:"ON"},{s:"2026-03-02",e:"2026-04-12",st:"OFF"},{s:"2026-04-13",e:"2026-05-24",st:"ON"},{s:"2026-05-25",e:"2026-07-06",st:"OFF"},{s:"2026-07-07",e:"2026-08-17",st:"ON"},{s:"2026-08-18",e:"2026-09-28",st:"OFF"},{s:"2026-09-29",e:"2026-11-09",st:"WORKOVER"},{s:"2026-11-10",e:"2026-12-21",st:"OFF"},{s:"2026-12-22",e:"2026-12-31",st:"WORKOVER"}],ev:[]},
+  {name:"Matt O'Brien",quals:["Survey"],rot:[{s:"2026-01-01",e:"2026-01-28",st:"ON"},{s:"2026-01-29",e:"2026-03-11",st:"OFF"},{s:"2026-03-12",e:"2026-04-22",st:"ON"},{s:"2026-04-23",e:"2026-06-03",st:"OFF"},{s:"2026-06-04",e:"2026-07-15",st:"ON"},{s:"2026-07-16",e:"2026-08-26",st:"OFF"},{s:"2026-08-27",e:"2026-10-07",st:"WORKOVER"},{s:"2026-10-08",e:"2026-11-18",st:"OFF"},{s:"2026-11-19",e:"2026-12-30",st:"WORKOVER"},{s:"2026-12-31",e:"2026-12-31",st:"OFF"}],ev:[]},
+  {name:"Roberto Piani",quals:["UAM","Survey"],rot:[{s:"2026-01-01",e:"2026-12-31",st:"ON"}],ev:[],mg:1},
+];
+
+let MISSIONS = [
+  {id:1,name:"Riyadh UAM",type:"UAM",start:"2026-03-01",end:"2026-12-31",hc:1,color:"#87CEEB"},
+  {id:2,name:"Bahrain Skybridge",type:"UAM",start:"2026-04-26",end:"2026-12-31",hc:1,color:"#1a3a6b"},
+  {id:3,name:"Survey Argas",type:"Survey",start:"2026-02-28",end:"2026-04-15",hc:1,color:"#FF8C00"},
+  {id:4,name:"Survey GeoTech",type:"Survey",start:"2026-03-21",end:"2026-06-30",hc:3,color:"#E65100"},
+  {id:5,name:"Joby JFK",type:"Rally",start:"2026-04-01",end:"2026-12-31",hc:1,color:"#ef5350"},
+  {id:6,name:"Joby LAX",type:"Rally",start:"2026-04-01",end:"2026-12-31",hc:1,color:"#e53935"},
+  {id:7,name:"Rally Gassim",type:"Rally",start:"2026-03-01",end:"2026-12-31",hc:1,color:"#c62828"},
+];
+const DEFAULT_MISSION_COLORS={1:"#87CEEB",2:"#1a3a6b",3:"#FF8C00",4:"#E65100"};
+
+// ====== Load saved rotation edits from localStorage ======
+const savedRots = localStorage.getItem('pp_rots');
+if(savedRots){
+  try {
+    const rotMap = JSON.parse(savedRots);
+    for(const p of PILOTS){
+      if(rotMap[p.name]) p.rot = rotMap[p.name];
+    }
+  } catch(e){}
+}
+
+const savedMissions=localStorage.getItem('pp_missions');
+if(savedMissions){try{MISSIONS=JSON.parse(savedMissions);for(const m of MISSIONS){if(DEFAULT_MISSION_COLORS[m.id])m.color=DEFAULT_MISSION_COLORS[m.id];}}catch(e){}}
+let nid=Math.max(8,...MISSIONS.map(m=>m.id+1));
+let asgn=JSON.parse(localStorage.getItem('pp_asgn')||'null');
+
+function saveData(){
+  localStorage.setItem('pp_asgn',JSON.stringify(asgn));
+  localStorage.setItem('pp_missions',JSON.stringify(MISSIONS));
+  // Save rotation edits
+  const rotMap={};
+  for(const p of PILOTS) rotMap[p.name]=p.rot;
+  localStorage.setItem('pp_rots',JSON.stringify(rotMap));
+}
+
+// ====== CORE DATE FUNCTIONS — ALL LOCAL TIME ======
+// Parse date string to local midnight
+function D(s){ return new Date(s+'T00:00:00'); }
+
+// Format date to YYYY-MM-DD using LOCAL time (never UTC)
+function F(dt){
+  const y=dt.getFullYear(), m=String(dt.getMonth()+1).padStart(2,'0'), d=String(dt.getDate()).padStart(2,'0');
+  return `${y}-${m}-${d}`;
+}
+
+// Add days to a date string, return date string (LOCAL)
+function addDaysL(dateStr, n){
+  const dt = D(dateStr);
+  dt.setDate(dt.getDate() + n);
+  return F(dt);
+}
+
+// Get day of week for a date string (LOCAL) — 0=Sun..6=Sat, 5=Fri
+function dowL(dateStr){ return D(dateStr).getDay(); }
+
+// Day difference (b - a) in days
+function dB(a,b){ return Math.round((b.getTime()-a.getTime())/864e5); }
+
+// Day offset from T0
+function dO(dt){ return dB(T0,dt); }
+
+// Total days in range
+function tD(){ return dB(T0,T1); }
+
+// ====== Auto-populate if no saved data ======
+if(!asgn){
+  asgn={};
+  function _isOn(p,ds){for(const r of p.rot)if(ds>=r.s&&ds<=r.e&&r.st==='ON')return true;return false;}
+  function _add(mid,hi,pilot,s,e){const k=mid+'_'+hi;if(!asgn[k])asgn[k]=[];asgn[k].push({pilot,start:s,end:e});}
+  function autoFillWeekly(mid,hi,mStart,mEnd,pool){
+    const weeks=[];let c=new Date(D(mStart));const day=c.getDay();const diff=(day-5+7)%7;if(diff!==0)c.setDate(c.getDate()-diff);
+    while(F(c)<=mEnd){const we=new Date(c);we.setDate(we.getDate()+6);const ws=F(c)<mStart?mStart:F(c);const weFmt=F(we>D(mEnd)?D(mEnd):we);if(weFmt>=mStart)weeks.push({start:ws,end:weFmt});c.setDate(c.getDate()+7);}
+    let poolIdx=0,weeksOnCurrent=0,currentPilot=null;
+    for(const w of weeks){
+      if(weeksOnCurrent>=3||!currentPilot){currentPilot=null;weeksOnCurrent=0;
+        for(let tries=0;tries<pool.length;tries++){const pi=(poolIdx+tries)%pool.length;const p=PILOTS.find(pp=>pp.name===pool[pi]);
+          if(p&&_isOn(p,w.start)){let busy=false;for(const[k,arr]of Object.entries(asgn)){if(k===mid+'_'+hi)continue;for(const a of arr)if(a.pilot===pool[pi]&&a.end>=w.start&&a.start<=w.end){busy=true;break;}if(busy)break;}
+            if(!busy){currentPilot=pool[pi];poolIdx=(pi+1)%pool.length;break;}}}}
+      if(currentPilot&&_isOn(PILOTS.find(pp=>pp.name===currentPilot),w.start)){_add(mid,hi,currentPilot,w.start,w.end);weeksOnCurrent++;}else{weeksOnCurrent=3;}}
+  }
+  const surveyPool=["Dan Munteanu","Marius Hertz","Julio Bonet","Matt O'Brien","David Schicht","Kevin Allen"];
+  const uamPool=["Nathan Piper","David Leipsig","Lisa le Roux","Ivona Redlinska","Lindsay Pentz","Stephan Mayer","Rohit Kaundinya","David Schicht","Kevin Allen"];
+  autoFillWeekly(3,0,"2026-02-28","2026-04-15",surveyPool);
+  autoFillWeekly(4,0,"2026-03-21","2026-06-30",surveyPool.slice(0));
+  autoFillWeekly(4,1,"2026-03-21","2026-06-30",[...surveyPool].reverse());
+  autoFillWeekly(4,2,"2026-03-21","2026-06-30",surveyPool.slice(2));
+  autoFillWeekly(2,0,"2026-03-26","2026-12-31",uamPool);
+  autoFillWeekly(1,0,"2026-03-01","2026-12-31",uamPool);
+}
+
+// ====== CONSTANTS ======
+const T0=new Date(2026,1,1), T1=new Date(2027,0,31), DW=17, LW=160;
+const _fnCount={};PILOTS.forEach(p=>{const f=p.name.split(' ')[0];_fnCount[f]=(_fnCount[f]||0)+1;});
+function dispName(n){const p=n.split(' ');return _fnCount[p[0]]>1&&p.length>1?`${p[0]} ${p[p.length-1][0]}.`:p[0];}
+let sel=new Date(), pop=null;
+
+function isOn(p,ds){for(const r of p.rot)if(ds>=r.s&&ds<=r.e&&(r.st==='ON'||r.st==='WORKOVER'))return true;return false;}
+function getRotStatus(p,ds){for(const r of p.rot)if(ds>=r.s&&ds<=r.e)return r.st;return 'OFF';}
+function pg(p){if(p.mg) return 'mg';const u=p.quals.includes('UAM'),s=p.quals.includes('Survey');return u&&s?'both':u?'uam':'survey';}
+const PILOT_COLORS=JSON.parse(localStorage.getItem('pp_pilotColors')||'null')||{uam:'#87CEEB',both:'#1a3a6b',survey:'#FF8C00',mg:'#9CA3AF'};
+function gc(g){return PILOT_COLORS[g]||'#888';}
+function savePilotColors(){localStorage.setItem('pp_pilotColors',JSON.stringify(PILOT_COLORS));}
+
+function sk(m,h){return m+'_'+h;}
+function gA(m,h){return asgn[sk(m,h)]||[];}
+
+// Check if pilot is busy on another mission at a given date range
+function busy(name,s,e,xm,xh){
+  for(const[k,arr]of Object.entries(asgn)){
+    for(const a of arr){
+      if(a.pilot===name && a.end>=s && a.start<=e){
+        const p=k.split('_').map(Number);
+        if(p[0]===xm&&p[1]===xh) continue;
+        return MISSIONS.find(m=>m.id===p[0])?.name||true;
+      }
+    }
+  }
+  return false;
+}
+
+function addAs(m,h,pilot,s,e){
+  const k=sk(m,h);
+  if(!asgn[k]) asgn[k]=[];
+  // Allow overlaps — no conflict check
+  // Remove exact duplicates
+  asgn[k]=asgn[k].filter(a=>!(a.pilot===pilot&&a.start===s&&a.end===e));
+  asgn[k].push({pilot,start:s,end:e});
+  asgn[k].sort((a,b)=>a.start.localeCompare(b.start));
+  return true;
+}
+
+function remAs(m,h,p,s){const k=sk(m,h);if(asgn[k])asgn[k]=asgn[k].filter(a=>!(a.pilot===p&&a.start===s));}
+
+// Get all assignments for a pilot across all missions
+function pAs(name){
+  const r=[];
+  for(const[k,arr]of Object.entries(asgn)){
+    if(k.includes('_sp'))continue;
+    for(const a of arr){
+      if(a.pilot===name){
+        const p=k.split('_').map(Number);
+        const m=MISSIONS.find(mm=>mm.id===p[0]);
+        r.push({...a,mid:p[0],hi:p[1],color:m?.color||'#666',mname:m?.name||'?'});
+      }
+    }
+  }
+  return r;
+}
+
+// Detect overlaps on a heli slot
+function findOverlaps(mid, hi){
+  const arr = gA(mid,hi);
+  const overlaps = new Set();
+  for(let i=0;i<arr.length;i++){
+    for(let j=i+1;j<arr.length;j++){
+      if(arr[i].end >= arr[j].start && arr[i].start <= arr[j].end){
+        overlaps.add(i);
+        overlaps.add(j);
+      }
+    }
+  }
+  return overlaps;
+}
+
+// ====== THEME ======
+function applyTheme(theme){
+  if(theme==='light') document.documentElement.classList.add('light');
+  else document.documentElement.classList.remove('light');
+  const btn=document.getElementById('themeBtn');
+  if(btn) btn.textContent=theme==='light'?'☀️':'🌙';
+  localStorage.setItem('pp_theme',theme);
+}
+function toggleTheme(){
+  const cur=document.documentElement.classList.contains('light')?'dark':'light';
+  applyTheme(cur);
+}
+(function(){const t=localStorage.getItem('pp_theme');if(t)applyTheme(t);})();
+
+// ====== RENDER ======
+function monthsHtml(td){
+  const MN=["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
+  const gw=LW+td*DW;
+  const months=[];
+  let c=new Date(T0);
+  while(c<T1){
+    const me=new Date(c.getFullYear(),c.getMonth()+1,0);
+    const e=me>T1?T1:me;
+    const startOff=dO(c);
+    const endOff=dO(e);
+    months.push({name:MN[c.getMonth()],start:startOff,days:endOff-startOff+1,monthIdx:c.getMonth()});
+    c=new Date(c.getFullYear(),c.getMonth()+1,1);
+  }
+  // Month row
+  let mRow=`<div class="rlabel" style="height:18px;font-weight:700;font-size:10px"></div>`;
+  for(let mi=0;mi<months.length;mi++){
+    const m=months[mi];
+    const altBg = mi%2===1 ? 'background:var(--month-alt);' : '';
+    mRow+=`<div style="position:absolute;left:${LW+m.start*DW}px;width:${m.days*DW}px;height:18px;display:flex;align-items:center;justify-content:center;font-size:10px;font-weight:700;color:var(--muted);border-right:1px solid rgba(45,50,88,.4);${altBg}">${m.name}</div>`;
+  }
+  // Date row
+  let dRow=`<div class="rlabel" style="height:16px"></div>`;
+  for(let i=0;i<td;i++){
+    const dt=new Date(T0);dt.setDate(dt.getDate()+i);
+    const day=dt.getDate();
+    const dow=dt.getDay();
+    const isFri=dow===5;
+    const border=isFri?'border-left:2px solid var(--sun-border-color);':'';
+    const bg=(dow===5||dow===6)?'background:rgba(255,255,255,.03);':'';
+    dRow+=`<div style="position:absolute;left:${LW+i*DW}px;width:${DW}px;height:16px;display:flex;align-items:center;justify-content:center;font-size:8px;color:${isFri?'var(--accent)':'var(--muted)'};${border}${bg}">${day}</div>`;
+  }
+  return {html:`<div class="mrow" style="width:${gw}px;flex-direction:column;position:sticky;top:0;z-index:20"><div style="position:relative;height:18px;width:${gw}px">${mRow}</div><div style="position:relative;height:16px;width:${gw}px">${dRow}</div></div>`, months};
+}
+
+function weekOverlays(td){
+  // No full-height week overlays — week lines are drawn on individual bars instead
+  return '';
+}
+// Generate week tick positions (Fridays) as pixel offsets for drawing on bars
+function getWeekTicks(){
+  const ticks=[];
+  let c=new Date(T0);
+  while(c.getDay()!==5) c.setDate(c.getDate()+1);
+  while(c<T1){
+    ticks.push(dO(c)*DW);
+    c.setDate(c.getDate()+7);
+  }
+  return ticks;
+}
+// Generate week tick HTML for a bar given its left and width in pixels
+function weekTicksHTML(barLeft, barWidth, tickColor){
+  const ticks=getWeekTicks();
+  let html='';
+  tickColor=tickColor||'rgba(255,255,255,.25)';
+  for(const tx of ticks){
+    const rel=tx-barLeft;
+    if(rel>1 && rel<barWidth-1){
+      html+=`<div style="position:absolute;top:0;bottom:0;left:${rel}px;width:2px;background:${tickColor};pointer-events:none"></div>`;
+    }
+  }
+  return html;
+}
+
+function monthOverlays(td, months){
+  let html='';
+  for(let mi=0;mi<months.length;mi++){
+    if(mi%2===1){
+      const m=months[mi];
+      html+=`<div class="month-shade" style="left:${LW+m.start*DW}px;width:${m.days*DW}px"></div>`;
+    }
+  }
+  return html;
+}
+
+function render(){
+  const td=tD(), gw=LW+td*DW;
+  const {html:mh, months}=monthsHtml(td);
+  const ds=F(sel);
+  const cx=LW+dO(sel)*DW;
+
+  let html='';
+  html+=mh;
+  html+=`<div id="content-wrap" style="position:relative;width:${gw}px">`;
+  html+=weekOverlays(td);
+  html+=monthOverlays(td, months);
+
+  const uamP=PILOTS.filter(p=>pg(p)==='uam'), bothP=PILOTS.filter(p=>pg(p)==='both'), survP=PILOTS.filter(p=>pg(p)==='survey');
+
+  // Missions by type
+  const uam=MISSIONS.filter(m=>m.type==='UAM'), surv=MISSIONS.filter(m=>m.type==='Survey'), trn=MISSIONS.filter(m=>m.type==='Training'), rally=MISSIONS.filter(m=>m.type==='Rally');
+
+  // UAM Missions
+  html+=secRow('UAM Missions','var(--green)',td);
+  for(const m of uam)html+=missionRows(m,td);
+  html+=`<div class="row" style="min-height:22px"><div class="rlabel"><span class="add-btn" onclick="addM('UAM')">+ Add UAM Mission</span></div><div class="rbars" style="width:${td*DW}px"></div></div>`;
+
+  html+=`<div class="separator"></div>`;
+
+  // Pilot pairs (ordered)
+  const pairOrder=[
+    ['Will Lawrence','Stephan Mayer'],
+    ['David Leipsig','Nathan Piper'],
+    ['Lisa le Roux','Ivona Redlinska'],
+    ['Rohit Kaundinya','Lindsay Pentz'],
+    ['David Schicht','Kevin Allen'],
+    ['Dan Munteanu','Marius Hertz'],
+    ['Julio Bonet',"Matt O'Brien"],
+  ];
+  const listed=new Set();
+  html+=secRow('Pilots','var(--teal)',td);
+
+  // Category groups with sub-headers
+  const catGroups=[
+    {label:'Management',color:PILOT_COLORS.mg||'#9CA3AF',pairs:[['Will Lawrence','Roberto Piani']]},
+    {label:'UAM',color:PILOT_COLORS.uam,pairs:[['Stephan Mayer'],['David Leipsig','Nathan Piper'],['Lisa le Roux','Ivona Redlinska'],['Rohit Kaundinya','Lindsay Pentz']]},
+    {label:'UAM + Survey',color:PILOT_COLORS.both,pairs:[['David Schicht','Kevin Allen']]},
+    {label:'Survey',color:PILOT_COLORS.survey,pairs:[['Dan Munteanu','Marius Hertz'],['Julio Bonet',"Matt O'Brien"]]},
+  ];
+  for(const cat of catGroups){
+    // Category sub-header (compact)
+    html+=`<div class="row" style="min-height:7px;"><div class="rlabel" style="font-size:8px;font-weight:700;color:${cat.color};opacity:.8;padding:0 6px;display:flex;align-items:center">${cat.label}</div><div class="rbars" style="width:${td*DW}px;border-bottom:1px solid ${cat.color}30"></div></div>`;
+    for(const pair of cat.pairs){
+      for(const name of pair){
+        const p=PILOTS.find(pp=>pp.name===name);
+        if(p){html+=pilotRow(p,td,ds);listed.add(name);}
+      }
+      // Spacer between pairs
+      html+=`<div style="height:7px;background:rgba(255,255,255,.03)"></div>`;
+    }
+  }
+  // Any remaining pilots not in groups
+  for(const p of [...uamP,...bothP,...survP]){
+    if(!listed.has(p.name)){html+=pilotRow(p,td,ds);}
+  }
+  html+=`<div class="row" style="min-height:22px"><div class="rlabel"><span class="add-btn" onclick="showAddPilotPop(event)">+ Add Pilot</span></div><div class="rbars" style="width:${td*DW}px"></div></div>`;
+
+  html+=`<div class="separator"></div>`;
+
+  // Survey Missions
+  html+=secRow('Survey Missions','var(--blue)',td);
+  for(const m of surv)html+=missionRows(m,td);
+  if(trn.length){html+=secRow('Training','var(--orange)',td);for(const m of trn)html+=missionRows(m,td);}
+  html+=`<div class="row" style="min-height:22px"><div class="rlabel"><span class="add-btn" onclick="addM('Survey')">+ Add Survey Mission</span></div><div class="rbars" style="width:${td*DW}px"></div></div>`;
+
+  html+=`<div class="separator"></div>`;
+
+  // Ad Hoc Missions (packed into shared lanes)
+  html+=secRow('Ad Hoc Missions','var(--red)',td);
+  html+=adHocRows(rally,td);
+  html+=`<div class="row" style="min-height:22px"><div class="rlabel"><span class="add-btn" onclick="addM('Rally')">+ Add Ad Hoc Mission</span></div><div class="rbars" style="width:${td*DW}px"></div></div>`;
+
+  // Cursor
+  html+=`<div class="cur" style="left:${cx}px"></div>`;
+  html+=`<div class="cur-lbl" style="left:${cx}px">${ds}</div>`;
+  html+=`<div class="cur-drag" style="left:${cx}px"></div>`;
+  // Hover cursor line
+  html+=`<div id="hover-cur" style="position:absolute;top:0;bottom:0;width:1px;background:rgba(255,214,0,.4);z-index:14;pointer-events:none;display:none"></div>`;
+  html+=`<div id="hover-lbl" style="position:absolute;z-index:16;font-size:8px;background:rgba(255,214,0,.6);color:#000;padding:1px 4px;border-radius:2px;pointer-events:none;white-space:nowrap;font-weight:600;bottom:2px;display:none"></div>`;
+
+  // SVG overlay
+  html+=`<svg id="handoff-svg" class="handoff-svg" width="${gw}" height="1"></svg>`;
+  html+=`</div>`;
+
+  document.getElementById('mpanel').innerHTML=html;
+  document.getElementById('dp').value=ds;
+  const ccu=document.getElementById('cc-uam'),ccb=document.getElementById('cc-both'),ccs=document.getElementById('cc-survey');
+  if(ccu)ccu.value=PILOT_COLORS.uam;if(ccb)ccb.value=PILOT_COLORS.both;if(ccs)ccs.value=PILOT_COLORS.survey;
+  const ccm=document.getElementById('cc-mg');if(ccm)ccm.value=PILOT_COLORS.mg||'#9CA3AF';
+  saveData();
+  setupCursor();
+  setupDrops();
+  setupDrags();
+  setupClickToMove();
+  setupHoverCursor();
+  setupMissionDrag();
+  setupAssignmentResize();
+  setupAssignmentClicks();
+  setupPilotRowClicks();
+  setupRotationClicks();
+  drawHandoffLines();
+}
+
+function secRow(label,color,td){
+  return `<div class="row sec-row"><div class="rlabel" style="color:${color}">${label}</div><div class="rbars" style="width:${tD()*DW}px"></div></div>`;
+}
+
+function missionRows(m,td){
+  let h='';
+  const laneH=31; // height per helicopter lane
+  const titleH=13; // mission title row height
+  const totalH=titleH+laneH*m.hc; // total height = title + lanes
+  const ml=Math.max(0,dO(D(m.start)))*DW, mw=Math.max(20,(Math.min(td,dO(D(m.end))+1)-Math.max(0,dO(D(m.start))))*DW);
+
+  // Build helicopter lane labels
+  let labelHtml = `<div style="display:flex;flex-direction:column;height:100%">`;
+  labelHtml += `<div style="font-weight:600;font-size:11px;color:${m.color};cursor:pointer;height:${titleH}px;display:flex;align-items:center" onclick="showPop(event,${m.id})">● ${m.name} <span style="font-weight:400;font-size:9px;opacity:.6;margin-left:4px">${m.hc}x</span></div>`;
+  for(let hi=0;hi<m.hc;hi++){
+    labelHtml+=`<div style="font-size:9px;color:var(--muted);height:${laneH}px;display:flex;align-items:center;padding-left:8px">🚁 ${hi+1}</div>`;
+  }
+  labelHtml+=`</div>`;
+
+  // Build the combined bar area with mission bar spanning full height and lanes inside
+  let barsHtml='';
+  // Mission background bar spanning all lanes
+  barsHtml+=`<div class="mbar" data-mid="${m.id}" style="left:${ml}px;width:${mw}px;height:${titleH}px;top:0;bottom:auto;background:${m.color};border:1px solid ${m.color};border-radius:4px 4px 0 0;cursor:grab;z-index:2">
+    ${weekTicksHTML(ml,mw,'rgba(255,255,255,.2)')}
+    <span class="mbar-date mbar-start" style="color:rgba(255,255,255,.9)">${m.start.slice(5)}</span>
+    <span class="mbar-name" style="color:#fff">${m.name}</span>
+    <span class="mbar-date mbar-end" style="color:rgba(255,255,255,.9)">${m.end.slice(5)}</span>
+  </div>`;
+  // Helicopter lane background — solid, same as title bar
+  barsHtml+=`<div style="position:absolute;left:${ml}px;width:${mw}px;top:${titleH}px;height:${totalH-titleH}px;background:${m.color};border-left:1px solid ${m.color};border-right:1px solid ${m.color};border-bottom:1px solid ${m.color};border-radius:0 0 4px 4px;pointer-events:none;z-index:0">${weekTicksHTML(ml,mw,'rgba(255,255,255,.15)')}</div>`;
+
+  // Helicopter lanes
+  for(let hi=0;hi<m.hc;hi++){
+    const laneTop=titleH+hi*laneH;
+    const overlaps = findOverlaps(m.id, hi);
+    const arr = gA(m.id, hi);
+    // Lane separator
+    if(hi>0) barsHtml+=`<div style="position:absolute;top:${laneTop}px;left:${ml}px;width:${mw}px;height:1px;background:${m.color};opacity:.2;pointer-events:none;z-index:1"></div>`;
+    // Drop zone for this lane
+    barsHtml+=`<div class="h-drop" data-mid="${m.id}" data-hi="${hi}" style="position:absolute;top:${laneTop}px;left:0;right:0;height:${laneH}px;z-index:0"></div>`;
+    // Assignment bars — assign sub-lanes for overlapping bars
+    const hasOverlaps = overlaps.size > 0;
+    // Assign sub-lane index to each bar (0 or 1) for overlapping ones
+    const subLane = new Array(arr.length).fill(0);
+    if(hasOverlaps){
+      for(let ai=0;ai<arr.length;ai++){
+        if(!overlaps.has(ai)) continue;
+        // Find if lane 0 is taken by an earlier overlapping bar
+        let lane0Taken = false;
+        for(let bi=0;bi<ai;bi++){
+          if(subLane[bi]===0 && overlaps.has(bi) && arr[bi].end>=arr[ai].start && arr[bi].start<=arr[ai].end){
+            lane0Taken = true; break;
+          }
+        }
+        subLane[ai] = lane0Taken ? 1 : 0;
+      }
+    }
+    for(let ai=0;ai<arr.length;ai++){
+      const a=arr[ai];
+      const p=PILOTS.find(pp=>pp.name===a.pilot);
+      const al=Math.max(0,dO(D(a.start)))*DW, aw=Math.max(14,(Math.min(td,dO(D(a.end))+1)-Math.max(0,dO(D(a.start))))*DW);
+      const off=p?!isOn(p,a.start):false;
+      let cls='abar';
+      if(off) cls+=' offduty';
+      const fn=dispName(a.pilot);
+      const safeP=a.pilot.replace(/'/g,"\\'");
+      // Calculate position: if overlapping, split into half-height sub-lanes
+      let barTop, barH;
+      if(overlaps.has(ai)){
+        const halfH = (laneH-4)/2;
+        barTop = laneTop + 2 + subLane[ai]*halfH;
+        barH = halfH;
+      } else {
+        barTop = laneTop+3;
+        barH = laneH-6;
+      }
+      barsHtml+=`<div class="${cls}" draggable="true" data-apilot="${a.pilot}" data-astart="${a.start}" data-aend="${a.end}" data-amid="${m.id}" data-ahi="${hi}" style="left:${al}px;width:${aw}px;top:${barTop}px;height:${barH}px;background:${p?gc(pg(p)):'#666'}" title="${a.pilot}: ${a.start}→${a.end}${off?' (OFF!)':''}">
+        ${weekTicksHTML(al,aw,'rgba(255,255,255,.2)')}
+        <span class="abar-grip abar-grip-l" data-edge="start" data-apilot="${a.pilot}" data-astart="${a.start}" data-aend="${a.end}" data-amid="${m.id}" data-ahi="${hi}"></span>
+        <span class="abar-date abar-date-l">${a.start.slice(5)}</span>${fn}<span class="abar-date abar-date-r">${a.end.slice(5)}</span>
+        <span class="abar-grip abar-grip-r" data-edge="end" data-apilot="${a.pilot}" data-astart="${a.start}" data-aend="${a.end}" data-amid="${m.id}" data-ahi="${hi}"></span>
+        <span class="ax" onclick="event.stopPropagation();remAs(${m.id},${hi},'${safeP}','${a.start}');render()">×</span>
+      </div>`;
+    }
+  }
+
+  h+=`<div class="row m-row" style="min-height:${totalH}px"><div class="rlabel" style="min-height:${totalH}px">${labelHtml}</div><div class="rbars" style="width:${td*DW}px;height:${totalH}px;position:relative">${barsHtml}</div></div>`;
+  return h;
+}
+
+// Ad Hoc missions: all pack into shared lanes, height adapts to max heli count in lane
+function adHocRows(missions,td){
+  if(!missions.length) return '';
+  let h='';
+  const sorted=[...missions].sort((a,b)=>a.start.localeCompare(b.start));
+  // Bin-pack: non-overlapping missions share lanes
+  const lanes=[];
+  for(const m of sorted){
+    let placed=false;
+    for(const lane of lanes){
+      const last=lane[lane.length-1];
+      if(m.start>last.end){lane.push(m);placed=true;break;}
+    }
+    if(!placed) lanes.push([m]);
+  }
+  const heliH=31, titleH=13;
+  for(let li=0;li<lanes.length;li++){
+    const lane=lanes[li];
+    // Lane height = tallest mission's heli count
+    const maxHc=Math.max(...lane.map(m=>m.hc));
+    const totalH=titleH+heliH*maxHc;
+    let labelHtml=`<div style="display:flex;flex-direction:column;height:100%">`;
+    labelHtml+=`<div style="font-weight:600;font-size:10px;color:var(--red);height:${titleH}px;display:flex;align-items:center">Lane ${li+1}</div>`;
+    for(let hi=0;hi<maxHc;hi++){
+      labelHtml+=`<div style="font-size:9px;color:var(--muted);height:${heliH}px;display:flex;align-items:center;padding-left:8px">🚁 ${maxHc>1?(hi+1):''}</div>`;
+    }
+    labelHtml+=`</div>`;
+    let barsHtml='';
+    for(const m of lane){
+      const ml=Math.max(0,dO(D(m.start)))*DW, mw=Math.max(20,(Math.min(td,dO(D(m.end))+1)-Math.max(0,dO(D(m.start))))*DW);
+      const mTotalH=titleH+heliH*m.hc;
+      // Title bar
+      barsHtml+=`<div class="mbar" data-mid="${m.id}" style="left:${ml}px;width:${mw}px;height:${titleH}px;top:0;bottom:auto;background:${m.color};border:1px solid ${m.color};border-radius:4px 4px 0 0;cursor:pointer;z-index:2" onclick="showPop(event,${m.id})">
+        <span class="mbar-name" style="color:#fff;font-size:9px">${m.name} ${m.hc>1?m.hc+'x':''}</span>
+        <span class="mbar-date mbar-end" style="color:rgba(255,255,255,.8)">${m.start.slice(5)}→${m.end.slice(5)}</span>
+      </div>`;
+      // Heli lane backgrounds
+      barsHtml+=`<div style="position:absolute;left:${ml}px;width:${mw}px;top:${titleH}px;height:${heliH*m.hc}px;background:${m.color};border-left:1px solid ${m.color};border-right:1px solid ${m.color};border-bottom:1px solid ${m.color};border-radius:0 0 4px 4px;pointer-events:none;z-index:0"></div>`;
+      // Per-heli drop zones and assignment bars
+      for(let hi=0;hi<m.hc;hi++){
+        const laneTop=titleH+hi*heliH;
+        if(hi>0) barsHtml+=`<div style="position:absolute;top:${laneTop}px;left:${ml}px;width:${mw}px;height:1px;background:${m.color};opacity:.2;pointer-events:none;z-index:1"></div>`;
+        barsHtml+=`<div class="h-drop" data-mid="${m.id}" data-hi="${hi}" style="position:absolute;top:${laneTop}px;left:${ml}px;width:${mw}px;height:${heliH}px;z-index:0"></div>`;
+        const arr=gA(m.id,hi);
+        for(const a of arr){
+          const p=PILOTS.find(pp=>pp.name===a.pilot);
+          const al=Math.max(0,dO(D(a.start)))*DW, aw=Math.max(14,(Math.min(td,dO(D(a.end))+1)-Math.max(0,dO(D(a.start))))*DW);
+          const off=p?!isOn(p,a.start):false;
+          const fn=dispName(a.pilot);
+          const safeP=a.pilot.replace(/'/g,"\\'");
+          barsHtml+=`<div class="abar${off?' offduty':''}" draggable="true" data-apilot="${a.pilot}" data-astart="${a.start}" data-aend="${a.end}" data-amid="${m.id}" data-ahi="${hi}" style="left:${al}px;width:${aw}px;top:${laneTop+3}px;height:${heliH-6}px;background:${p?gc(pg(p)):'#666'}" title="${a.pilot}: ${a.start}→${a.end}${off?' (OFF!)':''}">
+            <span class="abar-grip abar-grip-l" data-edge="start" data-apilot="${a.pilot}" data-astart="${a.start}" data-aend="${a.end}" data-amid="${m.id}" data-ahi="${hi}"></span>
+            <span class="abar-date abar-date-l">${a.start.slice(5)}</span>${fn}<span class="abar-date abar-date-r">${a.end.slice(5)}</span>
+            <span class="abar-grip abar-grip-r" data-edge="end" data-apilot="${a.pilot}" data-astart="${a.start}" data-aend="${a.end}" data-amid="${m.id}" data-ahi="${hi}"></span>
+            <span class="ax" onclick="event.stopPropagation();remAs(${m.id},${hi},'${safeP}','${a.start}');render()">×</span>
+          </div>`;
+        }
+      }
+    }
+    h+=`<div class="row m-row" style="min-height:${totalH}px"><div class="rlabel" style="min-height:${totalH}px">${labelHtml}</div><div class="rbars" style="width:${td*DW}px;height:${totalH}px;position:relative">${barsHtml}</div></div>`;
+  }
+  return h;
+}
+
+function pilotRow(p,td,ds){
+  const g=pg(p), on=isOn(p,ds);
+  let bars='';
+  for(let ri=0;ri<p.rot.length;ri++){
+    const r=p.rot[ri];
+    const rawL=dO(D(r.s)), rawR=dO(D(r.e));
+    const rl=Math.max(0,rawL)*DW, rw=Math.max(0,(Math.min(td,rawR+1)-Math.max(0,rawL))*DW);
+    if(rw<=0) continue;
+
+    if(r.st==='ON'||r.st==='WORKOVER'){
+      const sLabel=r.s.slice(5);
+      const eLabel=r.e.slice(5);
+      // Calculate week count
+      const days = dB(D(r.s),D(r.e))+1;
+      const weeks = Math.round(days/7);
+      const weekLabel = weeks+'w';
+      const isStandard = days===42; // exactly 6 weeks
+      const centerCls = isStandard ? 'rot-center' : 'rot-center warn';
+      const blkCls = r.st==='WORKOVER' ? 'duty-blk workover' : 'duty-blk on';
+      bars+=`<div class="${blkCls}" data-pilot="${p.name}" data-ri="${ri}" style="left:${rl}px;width:${rw}px;background:${r.st==='WORKOVER'?'#42A5F5':'#10B981'}">
+        ${weekTicksHTML(rl,rw,'rgba(255,255,255,.2)')}
+        <span class="rot-date rot-start">${sLabel}</span>
+        <span class="${centerCls}">${weekLabel}</span>
+        <span class="rot-date rot-end">${eLabel}</span>
+      </div>`;
+    } else {
+      bars+=`<div class="duty-blk off" data-pilot="${p.name}" data-ri="${ri}" style="left:${rl}px;width:${rw}px"></div>`;
+    }
+  }
+  // Pilot assignment blocks on pilot row
+  const assignments=pAs(p.name);
+  const merged={};
+  for(const a of assignments){
+    const key=a.mid+'_'+a.hi;
+    if(!merged[key])merged[key]=[];
+    merged[key].push(a);
+  }
+  for(const key of Object.keys(merged)){
+    const arr=merged[key].sort((a,b)=>a.start.localeCompare(b.start));
+    const groups=[];
+    let cur=null;
+    for(const a of arr){
+      if(cur && dB(D(cur.end),D(a.start))<=1){
+        cur.end=a.end;
+      } else {
+        if(cur)groups.push(cur);
+        cur={...a};
+      }
+    }
+    if(cur)groups.push(cur);
+    for(const a of groups){
+      const al=Math.max(0,dO(D(a.start)))*DW, aw=Math.max(14,(Math.min(td,dO(D(a.end))+1)-Math.max(0,dO(D(a.start))))*DW);
+      bars+=`<div class="pa-block" data-pa-pilot="${p.name}" data-pa-mid="${a.mid}" data-pa-hi="${a.hi}" data-pa-start="${a.start}" data-pa-end="${a.end}" data-pa-mname="${a.mname}" style="left:${al}px;width:${aw}px;background:${a.color}CC">${a.mname}</div>`;
+    }
+  }
+  // Calculate total ON days
+  let daysOnCount=0;
+  for(const r of p.rot){
+    if(r.st==='ON'||r.st==='WORKOVER'){
+      const rs=D(r.s),re=D(r.e);
+      daysOnCount+=Math.round((re-rs)/(864e5))+1;
+    }
+  }
+  const daysOnLabel=`<span style="position:absolute;right:4px;top:50%;transform:translateY(-50%);font-size:9px;font-weight:700;color:var(--muted);z-index:5;background:var(--bg);padding:0 3px;border-radius:2px">${daysOnCount}d</span>`;
+  const labelStyle=on?`background:#10B981;border-left:3px solid #059669;color:#fff;font-weight:700`:`background:var(--surface);color:var(--muted);font-weight:400;opacity:.7`;
+  const safePN=p.name.replace(/'/g,"\\'");
+  return `<div class="row p-row" draggable="true" data-pilot="${p.name}" data-group="${g}"><div class="rlabel" style="${labelStyle}"><span style="flex:1;overflow:hidden;text-overflow:ellipsis">${p.name}</span><span class="rot-add-btn" onclick="event.stopPropagation();showAddRotPop(event,'${safePN}')" title="Add rotation" style="cursor:pointer;font-size:13px;opacity:.6;margin-left:4px;flex-shrink:0">+</span></div><div class="rbars" style="width:${td*DW}px;height:21px">${bars}${daysOnLabel}</div></div>`;
+}
+
+// ====== ROTATION CLICK/EDIT POPOVER ======
+function setupRotationClicks(){
+  document.querySelectorAll('.duty-blk').forEach(blk=>{
+    blk.addEventListener('click', e=>{
+      e.stopPropagation();
+      const pilotName = blk.dataset.pilot;
+      const ri = parseInt(blk.dataset.ri);
+      if(!pilotName || isNaN(ri)) return;
+      const p = PILOTS.find(pp=>pp.name===pilotName);
+      if(!p || !p.rot[ri]) return;
+      showRotPop(e, p, ri);
+    });
+  });
+}
+
+function showRotPop(e, pilot, ri){
+  if(pop) pop.remove();
+  const r = pilot.rot[ri];
+  const div = document.createElement('div');
+  div.className='pop';
+  div.style.top=Math.min(e.clientY+5,innerHeight-300)+'px';
+  div.style.left=Math.min(e.clientX,innerWidth-300)+'px';
+  div.innerHTML=`
+    <div style="font-weight:700;font-size:12px;margin-bottom:4px">Edit Rotation</div>
+    <div style="font-size:11px;color:var(--accent);margin-bottom:6px">${pilot.name}</div>
+    <label>Start Date</label>
+    <input type="date" id="rot-start" value="${r.s}">
+    <label>End Date</label>
+    <input type="date" id="rot-end" value="${r.e}">
+    <label>Status</label>
+    <select id="rot-status">
+      <option value="ON"${r.st==='ON'?' selected':''}>ON</option>
+      <option value="OFF"${r.st==='OFF'?' selected':''}>OFF</option>
+      <option value="WORKOVER"${r.st==='WORKOVER'?' selected':''}>WORKOVER</option>
+    </select>
+    <div class="pb">
+      <button class="pdel" onclick="deleteRot()">Delete</button>
+      <button class="pcancel" onclick="cPop()">Cancel</button>
+      <button class="psave" onclick="saveRotPop()">Save</button>
+    </div>
+  `;
+  div._rotCtx = {pilot, ri, isNew:false};
+  document.body.appendChild(div);
+  pop=div;
+  popPos(div,e);
+  setTimeout(()=>document.addEventListener('click',cPop2),10);
+}
+
+function showAddRotPop(e, pilotName){
+  if(pop) pop.remove();
+  const pilot = PILOTS.find(pp=>pp.name===pilotName);
+  if(!pilot) return;
+  const ds = F(sel); // default to cursor date
+  const de = addDaysL(ds, 41); // default 6 weeks
+  const div = document.createElement('div');
+  div.className='pop';
+  div.style.top=Math.min(e.clientY+5,innerHeight-300)+'px';
+  div.style.left=Math.min(e.clientX,innerWidth-300)+'px';
+  div.innerHTML=`
+    <div style="font-weight:700;font-size:12px;margin-bottom:4px">Add Rotation</div>
+    <div style="font-size:11px;color:var(--accent);margin-bottom:6px">${pilot.name}</div>
+    <label>Start Date</label>
+    <input type="date" id="rot-start" value="${ds}">
+    <label>End Date</label>
+    <input type="date" id="rot-end" value="${de}">
+    <label>Status</label>
+    <select id="rot-status">
+      <option value="ON">ON</option>
+      <option value="OFF">OFF</option>
+      <option value="WORKOVER" selected>WORKOVER</option>
+    </select>
+    <div class="pb">
+      <button class="pcancel" onclick="cPop()">Cancel</button>
+      <button class="psave" onclick="saveRotPop()">Save</button>
+    </div>
+  `;
+  div._rotCtx = {pilot, ri:-1, isNew:true};
+  document.body.appendChild(div);
+  pop=div;
+  popPos(div,e);
+  setTimeout(()=>document.addEventListener('click',cPop2),10);
+}
+
+function saveRotPop(){
+  if(!pop||!pop._rotCtx) return;
+  const {pilot, ri, isNew} = pop._rotCtx;
+  const newStart = document.getElementById('rot-start').value;
+  const newEnd = document.getElementById('rot-end').value;
+  const newStatus = document.getElementById('rot-status').value;
+  if(!newStart||!newEnd){alert('Set both dates');return;}
+  if(newEnd<newStart){alert('End must be after start');return;}
+  if(isNew){
+    // Insert new rotation in sorted order
+    pilot.rot.push({s:newStart, e:newEnd, st:newStatus});
+    pilot.rot.sort((a,b)=>a.s.localeCompare(b.s));
+  } else {
+    pilot.rot[ri].s = newStart;
+    pilot.rot[ri].e = newEnd;
+    pilot.rot[ri].st = newStatus;
+  }
+  cPop();
+  render();
+}
+
+function deleteRot(){
+  if(!pop||!pop._rotCtx) return;
+  const {pilot, ri} = pop._rotCtx;
+  if(!confirm('Delete this rotation block?')) return;
+  pilot.rot.splice(ri, 1);
+  cPop();
+  render();
+}
+
+// ====== ASSIGNMENT EDITOR POPOVER ======
+function showAsgnPop(e, opts, avoidEl){
+  e.stopPropagation();
+  if(pop) pop.remove();
+  const div=document.createElement('div');div.className='pop';
+  div.style.top=Math.min(e.clientY+5,innerHeight-380)+'px';
+  div.style.left=Math.min(e.clientX,innerWidth-300)+'px';
+  let mOpts='';
+  for(const m of MISSIONS){
+    mOpts+=`<option value="${m.id}"${m.id===opts.mid?' selected':''}>${m.name} (${m.type})</option>`;
+  }
+  const curM=MISSIONS.find(mm=>mm.id===opts.mid);
+  let hOpts='';
+  if(curM){
+    for(let i=0;i<curM.hc;i++){
+      hOpts+=`<option value="${i}"${i===opts.hi?' selected':''}>Heli ${i+1}</option>`;
+    }
+  }
+  div.innerHTML=`
+    <div style="font-weight:700;font-size:10px;margin-bottom:2px">${opts.isNew?'New Assignment':'Edit'}</div>
+    <div style="font-size:9px;color:var(--accent);margin-bottom:4px">${opts.pilot}</div>
+    <label>Mission</label>
+    <select id="ae-mission" onchange="aeUpdateHelis()">${mOpts}</select>
+    <label>Heli Slot</label>
+    <select id="ae-heli">${hOpts}</select>
+    <label>Start Date</label>
+    <input type="date" id="ae-start" value="${opts.start||''}">
+    <label>End Date</label>
+    <input type="date" id="ae-end" value="${opts.end||''}">
+    <div class="pb">
+      ${opts.isNew?'':'<button class="pdel" onclick="aeDelete()">Delete</button>'}
+      <button class="pcancel" onclick="cPop()">Cancel</button>
+      <button class="psave" onclick="aeSave()">Save</button>
+    </div>
+  `;
+  div._aeCtx={pilot:opts.pilot,origMid:opts.mid,origHi:opts.hi,origStart:opts.start,isNew:opts.isNew};
+  document.body.appendChild(div);pop=div;
+  popPos(div,e,avoidEl);
+  setTimeout(()=>document.addEventListener('click',cPop2),10);
+}
+
+function aeUpdateHelis(){
+  const msel=document.getElementById('ae-mission');
+  const hsel=document.getElementById('ae-heli');
+  if(!msel||!hsel) return;
+  const mid=parseInt(msel.value);
+  const m=MISSIONS.find(mm=>mm.id===mid);
+  if(!m) return;
+  hsel.innerHTML='';
+  for(let i=0;i<m.hc;i++){
+    hsel.innerHTML+=`<option value="${i}">Heli ${i+1}</option>`;
+  }
+}
+
+function aeSave(){
+  if(!pop||!pop._aeCtx) return;
+  const ctx=pop._aeCtx;
+  const mid=parseInt(document.getElementById('ae-mission').value);
+  const hi=parseInt(document.getElementById('ae-heli').value);
+  const start=document.getElementById('ae-start').value;
+  const end=document.getElementById('ae-end').value;
+  if(!start||!end){alert('Please set both start and end dates');return;}
+  if(end<start){alert('End date must be after start date');return;}
+  const m=MISSIONS.find(mm=>mm.id===mid);
+  if(!m){alert('Mission not found');return;}
+  const p=PILOTS.find(pp=>pp.name===ctx.pilot);
+  if(!p) return;
+  // No qualification restrictions — any pilot can go in any mission
+  if(!ctx.isNew && ctx.origStart){
+    remAs(ctx.origMid,ctx.origHi,ctx.pilot,ctx.origStart);
+  }
+  addAs(mid,hi,ctx.pilot,start,end);
+  cPop();render();
+}
+
+function aeDelete(){
+  if(!pop||!pop._aeCtx) return;
+  const ctx=pop._aeCtx;
+  if(ctx.origStart) remAs(ctx.origMid,ctx.origHi,ctx.pilot,ctx.origStart);
+  cPop();render();
+}
+
+function setupAssignmentClicks(){
+  document.querySelectorAll('.abar[data-amid]').forEach(bar=>{
+    bar.addEventListener('click',e=>{
+      if(e.target.closest('.ax')) return;
+      e.stopPropagation();
+      const mid=parseInt(bar.dataset.amid);
+      const hi=parseInt(bar.dataset.ahi);
+      const pilot=bar.dataset.apilot;
+      const start=bar.dataset.astart;
+      const end=bar.dataset.aend;
+      showAsgnPop(e,{pilot,mid,hi,start,end,isNew:false},bar);
+    });
+  });
+}
+
+function setupPilotRowClicks(){
+  document.querySelectorAll('.pa-block[data-pa-pilot]').forEach(blk=>{
+    blk.style.pointerEvents='auto';
+    blk.style.cursor='pointer';
+    blk.addEventListener('click',e=>{
+      e.stopPropagation();
+      const pilot=blk.dataset.paPilot;
+      const mid=parseInt(blk.dataset.paMid);
+      const hi=parseInt(blk.dataset.paHi);
+      const start=blk.dataset.paStart;
+      const end=blk.dataset.paEnd;
+      const k=sk(mid,hi);
+      const arr=(asgn[k]||[]).filter(a=>a.pilot===pilot&&a.start>=start&&a.end<=end);
+      if(arr.length>0){
+        showAsgnPop(e,{pilot,mid,hi,start:arr[0].start,end:arr[0].end,isNew:false});
+      } else {
+        showAsgnPop(e,{pilot,mid,hi,start,end,isNew:false});
+      }
+    });
+  });
+}
+
+// ====== HANDOFF LINES ======
+function drawHandoffLines(){
+  const svg=document.getElementById('handoff-svg');
+  if(!svg) return;
+  const wrap=document.getElementById('content-wrap');
+  const wrapRect=wrap.getBoundingClientRect();
+
+  const pRows=document.querySelectorAll('.p-row');
+  const pilotYMap={};
+  pRows.forEach(row=>{
+    const name=row.dataset.pilot;
+    const rect=row.getBoundingClientRect();
+    pilotYMap[name]={top:rect.top-wrapRect.top, height:rect.height, cy:rect.top-wrapRect.top+rect.height/2};
+  });
+
+  let paths='';
+  for(const m of MISSIONS){
+    for(let hi=0;hi<m.hc;hi++){
+      const arr=(asgn[sk(m.id,hi)]||[]).slice().sort((a,b)=>a.start.localeCompare(b.start));
+      for(let i=0;i<arr.length-1;i++){
+        const a1=arr[i], a2=arr[i+1];
+        if(a1.pilot===a2.pilot) continue;
+        if(m.type==='Rally') continue; // No handoff lines for Ad Hoc missions
+        const gap=dB(D(a1.end),D(a2.start));
+        if(gap>1) continue;
+
+        const y1=pilotYMap[a1.pilot];
+        const y2=pilotYMap[a2.pilot];
+        if(!y1||!y2) continue;
+
+        const x1=LW+Math.min(tD(),dO(D(a1.end)))*DW;
+        const x2=LW+Math.max(0,dO(D(a2.start)))*DW;
+        const cy1=y1.cy, cy2=y2.cy;
+
+        const cpOff=Math.max(20,Math.min(Math.abs(cy2-cy1)*0.4,60));
+        const cp1x=x1+(x2-x1)*0.3;
+        const cp1y=cy1-cpOff;
+        const cp2x=x1+(x2-x1)*0.7;
+        const cp2y=cy2-cpOff;
+
+        paths+=`<path d="M${x1},${cy1} C${cp1x},${cp1y} ${cp2x},${cp2y} ${x2},${cy2}" stroke="${m.color}" fill="none" stroke-width="2.5" stroke-opacity="0.7" stroke-linecap="round"/>`;
+        paths+=`<circle cx="${x1}" cy="${cy1}" r="3" fill="${m.color}" opacity="0.8"/>`;
+        paths+=`<circle cx="${x2}" cy="${cy2}" r="3" fill="${m.color}" opacity="0.8"/>`;
+      }
+    }
+  }
+  svg.setAttribute('height',wrap.scrollHeight);
+  svg.innerHTML=paths;
+}
+
+// ====== CURSOR ======
+function setupCursor(){
+  document.querySelectorAll('.cur-drag').forEach(h=>{
+    h.addEventListener('mousedown',startCD);
+    h.addEventListener('touchstart',startCD,{passive:false});
+  });
+}
+function startCD(e){
+  e.preventDefault();
+  const wrap=document.getElementById('content-wrap');
+  function onMove(ev){
+    const cx=ev.touches?ev.touches[0].clientX:ev.clientX;
+    const rect=wrap.getBoundingClientRect();
+    const x=cx-rect.left-LW;
+    const di=Math.max(0,Math.min(tD()-1,Math.floor(x/DW)));
+    sel=new Date(T0);sel.setDate(sel.getDate()+di);
+    render();
+  }
+  function onUp(){document.removeEventListener('mousemove',onMove);document.removeEventListener('mouseup',onUp);document.removeEventListener('touchmove',onMove);document.removeEventListener('touchend',onUp);}
+  document.addEventListener('mousemove',onMove);
+  document.addEventListener('mouseup',onUp);
+  document.addEventListener('touchmove',onMove,{passive:false});
+  document.addEventListener('touchend',onUp);
+}
+
+function setupHoverCursor(){
+  const wrap=document.getElementById('content-wrap');
+  if(!wrap) return;
+  const hLine=document.getElementById('hover-cur');
+  const hLbl=document.getElementById('hover-lbl');
+  if(!hLine||!hLbl) return;
+  const MN=["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
+  let lastHoverDate='';
+  function updatePilotLabels(dateStr){
+    document.querySelectorAll('.p-row').forEach(row=>{
+      const name=row.dataset.pilot;
+      const p=PILOTS.find(pp=>pp.name===name);
+      if(!p) return;
+      const lbl=row.querySelector('.rlabel');
+      if(!lbl) return;
+      const on=isOn(p,dateStr);
+      if(on){
+        lbl.style.background='#10B981';
+        lbl.style.borderLeft='3px solid #059669';
+        lbl.style.color='#fff';
+        lbl.style.fontWeight='700';
+        lbl.style.opacity='1';
+      } else {
+        lbl.style.background='var(--surface)';
+        lbl.style.borderLeft='';
+        lbl.style.color='var(--muted)';
+        lbl.style.fontWeight='400';
+        lbl.style.opacity='.7';
+      }
+    });
+  }
+  wrap.addEventListener('mousemove',e=>{
+    const rect=wrap.getBoundingClientRect();
+    const x=e.clientX-rect.left-LW;
+    const di=Math.max(0,Math.min(tD()-1,Math.floor(x/DW)));
+    const px=LW+di*DW+DW/2;
+    const hDate=new Date(T0);hDate.setDate(hDate.getDate()+di);
+    const ds=F(hDate);
+    hLine.style.left=px+'px';
+    hLine.style.display='';
+    hLbl.style.left=(px+3)+'px';
+    hLbl.style.display='';
+    hLbl.textContent=hDate.getDate()+' '+MN[hDate.getMonth()];
+    if(ds!==lastHoverDate){
+      lastHoverDate=ds;
+      updatePilotLabels(ds);
+    }
+  });
+  wrap.addEventListener('mouseleave',()=>{
+    hLine.style.display='none';
+    hLbl.style.display='none';
+    // Reset to selected date
+    lastHoverDate='';
+    updatePilotLabels(F(sel));
+  });
+}
+
+function setupClickToMove(){
+  document.querySelectorAll('.rbars').forEach(bar=>{
+    bar.addEventListener('click',e=>{
+      if(e.target.closest('.abar')||e.target.closest('.ax')||e.target.closest('.pa-block')||e.target.closest('.duty-blk')) return;
+      const rect=bar.getBoundingClientRect();
+      const x=e.clientX-rect.left;
+      const di=Math.max(0,Math.min(tD()-1,Math.floor(x/DW)));
+      sel=new Date(T0);sel.setDate(sel.getDate()+di);
+      render();
+    });
+  });
+}
+
+// ====== MISSION BAR DRAG ======
+function setupMissionDrag(){
+  document.querySelectorAll('.mbar[data-mid]').forEach(bar=>{
+    bar.addEventListener('mousedown',e=>{
+      if(e.target.closest('.ax')) return;
+      e.preventDefault();e.stopPropagation();
+      const mid=parseInt(bar.dataset.mid);
+      const m=MISSIONS.find(mm=>mm.id===mid);if(!m) return;
+      const startX=e.clientX;
+      const origStart=m.start,origEnd=m.end;
+      function onMove(ev){
+        const dx=ev.clientX-startX;
+        const dayShift=Math.round(dx/DW);
+        m.start=addDaysL(origStart,dayShift);
+        m.end=addDaysL(origEnd,dayShift);
+        render();
+      }
+      function onUp(){document.removeEventListener('mousemove',onMove);document.removeEventListener('mouseup',onUp);saveData();}
+      document.addEventListener('mousemove',onMove);
+      document.addEventListener('mouseup',onUp);
+    });
+  });
+}
+
+// ====== ASSIGNMENT RESIZE & DRAG-TO-DUPLICATE ======
+function setupAssignmentResize(){
+  // Resize grips (mouse + touch)
+  document.querySelectorAll('.abar-grip').forEach(grip=>{
+    function startResize(e){
+      e.preventDefault();e.stopPropagation();
+      const isTouch=e.type==='touchstart';
+      const edge=grip.dataset.edge;
+      const pilot=grip.dataset.apilot;
+      const origStart=grip.dataset.astart;
+      const origEnd=grip.dataset.aend;
+      const mid=parseInt(grip.dataset.amid);
+      const hi=parseInt(grip.dataset.ahi);
+      const startX=isTouch?e.touches[0].clientX:e.clientX;
+      let lastDayShift=0;
+
+      function onMove(ev){
+        const cx=isTouch?ev.touches[0].clientX:ev.clientX;
+        const dx=cx-startX;
+        const dayShift=Math.round(dx/DW);
+        if(dayShift===lastDayShift) return;
+        lastDayShift=dayShift;
+        const k=sk(mid,hi);
+        if(!asgn[k]) return;
+        const idx=asgn[k].findIndex(a=>a.pilot===pilot&&(a.start===origStart||a.end===origEnd));
+        if(idx<0) return;
+        if(edge==='start'){
+          const newStart=addDaysL(origStart,dayShift);
+          if(newStart<=asgn[k][idx].end) asgn[k][idx].start=newStart;
+        } else {
+          const newEnd=addDaysL(origEnd,dayShift);
+          if(newEnd>=asgn[k][idx].start) asgn[k][idx].end=newEnd;
+        }
+        render();
+      }
+      const moveEvt=isTouch?'touchmove':'mousemove';
+      const upEvt=isTouch?'touchend':'mouseup';
+      function onUp(){document.removeEventListener(moveEvt,onMove);document.removeEventListener(upEvt,onUp);saveData();}
+      document.addEventListener(moveEvt,onMove,{passive:false});
+      document.addEventListener(upEvt,onUp);
+    }
+    grip.addEventListener('mousedown',startResize);
+    grip.addEventListener('touchstart',startResize,{passive:false});
+  });
+
+  // Keyboard arrow support for selected assignment bars
+  document.querySelectorAll('.abar[data-amid]').forEach(bar=>{
+    bar.setAttribute('tabindex','0');
+    bar.addEventListener('keydown',e=>{
+      if(e.key!=='ArrowLeft'&&e.key!=='ArrowRight') return;
+      e.preventDefault();
+      const pilot=bar.dataset.apilot;
+      const start=bar.dataset.astart;
+      const end=bar.dataset.aend;
+      const mid=parseInt(bar.dataset.amid);
+      const hi=parseInt(bar.dataset.ahi);
+      const k=sk(mid,hi);
+      if(!asgn[k]) return;
+      const idx=asgn[k].findIndex(a=>a.pilot===pilot&&a.start===start);
+      if(idx<0) return;
+      const shift=e.shiftKey?7:1; // Shift+Arrow = 1 week, Arrow = 1 day
+      const dir=e.key==='ArrowRight'?shift:-shift;
+      if(e.altKey){
+        // Alt+Arrow: move entire bar
+        asgn[k][idx].start=addDaysL(asgn[k][idx].start,dir);
+        asgn[k][idx].end=addDaysL(asgn[k][idx].end,dir);
+      } else {
+        // Arrow: extend/shrink end date
+        const newEnd=addDaysL(asgn[k][idx].end,dir);
+        if(newEnd>=asgn[k][idx].start) asgn[k][idx].end=newEnd;
+      }
+      saveData();render();
+      // Re-focus the bar after render
+      setTimeout(()=>{
+        const newBar=document.querySelector(`.abar[data-amid="${mid}"][data-ahi="${hi}"][data-apilot="${pilot}"]`);
+        if(newBar) newBar.focus();
+      },50);
+    });
+  });
+
+  // Drag assignment bar to DUPLICATE
+  document.querySelectorAll('.abar').forEach(bar=>{
+    bar.addEventListener('mousedown',e=>{
+      if(e.target.closest('.abar-grip')||e.target.closest('.ax')) return;
+      if(e.button!==0) return;
+      const pilot=bar.dataset.apilot;
+      const origStart=bar.dataset.astart;
+      const origEnd=bar.dataset.aend;
+      const mid=parseInt(bar.dataset.amid);
+      const hi=parseInt(bar.dataset.ahi);
+      const startX=e.clientX;
+      const duration=dB(D(origStart),D(origEnd));
+      let moved=false;
+      let previewStart=origStart, previewEnd=origEnd;
+
+      function onMove(ev){
+        const dx=ev.clientX-startX;
+        if(Math.abs(dx)<5&&!moved) return;
+        moved=true;
+        const weekShift=Math.round(dx/(DW*7));
+        if(weekShift===0){previewStart=origStart;previewEnd=origEnd;return;}
+        previewStart=addDaysL(origStart,weekShift*7);
+        previewEnd=addDaysL(origEnd,weekShift*7);
+      }
+      function onUp(){
+        document.removeEventListener('mousemove',onMove);
+        document.removeEventListener('mouseup',onUp);
+        if(moved && previewStart!==origStart){
+          const m=MISSIONS.find(mm=>mm.id===mid);
+          if(m && previewStart>=m.start && previewEnd<=m.end){
+            addAs(mid,hi,pilot,previewStart,previewEnd);
+            render();
+            saveData();
+          }
+        }
+      }
+      document.addEventListener('mousemove',onMove);
+      document.addEventListener('mouseup',onUp);
+    });
+  });
+}
+
+// ====== DRAG & DROP (pilot → heli slot) ======
+let dragN=null, ghost=null, dragFrom=null;
+function setupDrags(){
+  document.querySelectorAll('.p-row').forEach(r=>{
+    r.addEventListener('dragstart',e=>{
+      dragN=r.dataset.pilot;dragFrom=null;
+      r.classList.add('dragging');
+      e.dataTransfer.effectAllowed='copy';
+      e.dataTransfer.setData('text/plain',dragN);
+      ghost=document.createElement('div');ghost.className='ghost';ghost.style.background=gc(r.dataset.group);ghost.textContent=dragN;document.body.appendChild(ghost);
+      e.dataTransfer.setDragImage(ghost,0,0);
+    });
+    r.addEventListener('dragend',()=>{r.classList.remove('dragging');dragN=null;dragFrom=null;if(ghost){ghost.remove();ghost=null;}document.querySelectorAll('.drop-over').forEach(el=>el.classList.remove('drop-over'));});
+  });
+  // Assignment bars — no longer draggable (removed drag-to-duplicate)
+}
+
+// ====== DROP LOGIC — ALL LOCAL TIME, Math.floor ======
+function handleDrop(e,mid,hi){
+  e.preventDefault();
+  const name=e.dataTransfer.getData('text/plain');
+  const m=MISSIONS.find(mm=>mm.id===mid), p=PILOTS.find(pp=>pp.name===name);
+  if(!m||!p) return;
+  // No qualification restrictions
+
+  const wrap=document.getElementById('content-wrap');
+  const rect=wrap.getBoundingClientRect();
+  const x=e.clientX-rect.left-LW;
+  // CRITICAL: Math.floor for pixel-to-day, local dates
+  const dayIdx=Math.max(0,Math.min(tD()-1,Math.floor(x/DW)));
+  const dropDt=new Date(T0);dropDt.setDate(dropDt.getDate()+dayIdx);
+  const dropDate=F(dropDt);
+
+  if(dropDate<m.start||dropDate>m.end){alert('Drop outside mission date range');return;}
+
+  // Drop fills ONE week of coverage (Fri→Thu) around the drop point
+  const dropDow = dropDt.getDay(); // 0=Sun..6=Sat, 5=Fri
+
+  let startDate, endDate;
+  // Find the Friday that starts the week containing the drop date
+  const daysSinceFri = (dropDow - 5 + 7) % 7; // days since last Friday
+  const weekFri = addDaysL(dropDate, -daysSinceFri);
+  const weekThu = addDaysL(weekFri, 6);
+
+  startDate = weekFri < m.start ? m.start : weekFri;
+  endDate = weekThu > m.end ? m.end : weekThu;
+
+  if(endDate < startDate) return;
+
+  // No conflict check — allow all assignments
+
+  addAs(mid, hi, name, startDate, endDate);
+  render();
+}
+
+function setupDrops(){
+  const ms=document.getElementById('mscroll');
+  if(ms) ms.addEventListener('dragover',e=>e.preventDefault());
+  document.querySelectorAll('.h-drop').forEach(zone=>{
+    const mid=parseInt(zone.dataset.mid),hi=parseInt(zone.dataset.hi);
+    zone.addEventListener('dragover',e=>{e.preventDefault();e.stopPropagation();zone.style.background='rgba(76,175,80,.12)';});
+    zone.addEventListener('dragleave',e=>{zone.style.background='';});
+    zone.addEventListener('drop',e=>{e.stopPropagation();zone.style.background='';handleDrop(e,mid,hi);});
+    // Tap-to-assign for mobile (click on empty heli lane)
+    zone.addEventListener('click',e=>{
+      if(e.target.closest('.abar')) return; // don't trigger on existing bars
+      e.stopPropagation();
+      const m=MISSIONS.find(mm=>mm.id===mid);if(!m) return;
+      const wrap=document.getElementById('content-wrap');
+      const rect=wrap.getBoundingClientRect();
+      const x=e.clientX-rect.left-LW;
+      const dayIdx=Math.max(0,Math.min(tD()-1,Math.floor(x/DW)));
+      const dropDt=new Date(T0);dropDt.setDate(dropDt.getDate()+dayIdx);
+      const dropDate=F(dropDt);
+      if(dropDate<m.start||dropDate>m.end) return;
+      // Calculate Fri→Thu week
+      const dropDow=dropDt.getDay();
+      const daysSinceFri=(dropDow-5+7)%7;
+      const weekFri=addDaysL(dropDate,-daysSinceFri);
+      const weekThu=addDaysL(weekFri,6);
+      const startDate=weekFri<m.start?m.start:weekFri;
+      const endDate=weekThu>m.end?m.end:weekThu;
+      if(endDate<startDate) return;
+      // Show pilot picker popup
+      if(pop) pop.remove();
+      const div=document.createElement('div');div.className='pop';
+      const eligible=PILOTS.filter(p=>{
+        // No qualification filter — show all pilots
+        return true;
+      });
+      const onPilots=eligible.filter(p=>isOn(p,startDate));
+      const offPilots=eligible.filter(p=>!isOn(p,startDate));
+      let html='<div style="font-weight:700;font-size:12px;margin-bottom:4px">Assign Pilot</div>';
+      html+=`<div style="font-size:10px;color:var(--muted);margin-bottom:6px">${startDate} → ${endDate}</div>`;
+      if(onPilots.length){
+        html+='<div style="font-size:9px;color:var(--accent);margin:4px 0 2px;font-weight:600">ON ROTATION</div>';
+        for(const p of onPilots){
+          html+=`<div style="padding:6px 8px;cursor:pointer;border-radius:4px;font-size:11px;font-weight:600" onmouseover="this.style.background='var(--surface2)'" onmouseout="this.style.background=''" onclick="addAs(${mid},${hi},'${p.name.replace(/'/g,"\\'")}','${startDate}','${endDate}');cPop();render()">${p.name}</div>`;
+        }
+      }
+      if(offPilots.length){
+        html+='<div style="font-size:9px;color:var(--muted);margin:4px 0 2px;font-weight:600">OFF ROTATION</div>';
+        for(const p of offPilots){
+          html+=`<div style="padding:6px 8px;cursor:pointer;border-radius:4px;font-size:11px;font-weight:600;opacity:.5" onmouseover="this.style.background='var(--surface2)'" onmouseout="this.style.background=''" onclick="addAs(${mid},${hi},'${p.name.replace(/'/g,"\\'")}','${startDate}','${endDate}');cPop();render()">${p.name}</div>`;
+        }
+      }
+      html+='<div class="pb"><button class="pcancel" onclick="cPop()">Cancel</button></div>';
+      div.innerHTML=html;
+      document.body.appendChild(div);pop=div;
+      popPos(div,e);
+      setTimeout(()=>document.addEventListener('click',cPop2),10);
+    });
+  });
+}
+
+// ====== CONTROLS ======
+function goToday(){sel=new Date();render();scr();}
+function shf(d){sel.setDate(sel.getDate()+d);render();scr();}
+function setD(v){if(v){sel=D(v);render();scr();}}
+function scr(){const ms=document.getElementById('mscroll');ms.scrollLeft=Math.max(0,LW+dO(sel)*DW-ms.clientWidth/2);}
+
+// ====== MISSION CONFIG POPOVER ======
+function showPop(e,id){
+  e.stopPropagation();if(pop) pop.remove();
+  const m=MISSIONS.find(mm=>mm.id===id);if(!m) return;
+  const div=document.createElement('div');div.className='pop';
+  div.innerHTML=`<label>Name</label><input id="pn" value="${m.name}"><label>Type</label><select id="pt"><option value="UAM"${m.type==='UAM'?' selected':''}>UAM</option><option value="Survey"${m.type==='Survey'?' selected':''}>Survey</option><option value="Training"${m.type==='Training'?' selected':''}>Training</option><option value="Rally"${m.type==='Rally'?' selected':''}>Ad Hoc</option></select><label>Color</label><input type="color" id="pc" value="${m.color}" style="height:32px;padding:2px;cursor:pointer"><label>Start</label><input type="date" id="ps" value="${m.start}"><label>End</label><input type="date" id="pe" value="${m.end}"><label>Helicopters</label><input type="number" id="ph" value="${m.hc}" min="1" max="10"><div class="pb"><button class="pdel" onclick="delM(${m.id})">Delete</button><button class="pcancel" onclick="cPop()">Cancel</button><button class="psave" onclick="savePop(${m.id})">Save</button></div>`;
+  document.body.appendChild(div);pop=div;
+  const popRect=div.getBoundingClientRect();
+  div.style.top=Math.max(8,Math.min(e.clientY+5,innerHeight-popRect.height-8))+'px';
+  div.style.left=Math.max(8,Math.min(e.clientX,innerWidth-popRect.width-8))+'px';
+  setTimeout(()=>document.addEventListener('click',cPop2),10);
+}
+function popPos(div,e,avoidEl){
+  const r=div.getBoundingClientRect();
+  let top,left;
+  if(avoidEl){
+    const ar=avoidEl.getBoundingClientRect();
+    const popH=r.height||200;
+    // Try below the bar with generous gap
+    if(ar.bottom+15+popH<innerHeight){
+      top=ar.bottom+15;
+    } else {
+      // Above the bar with generous gap
+      top=Math.max(8,ar.top-popH-15);
+    }
+    left=Math.max(8,Math.min(ar.left,innerWidth-r.width-8));
+  } else {
+    top=Math.max(8,Math.min(e.clientY+5,innerHeight-r.height-8));
+    left=Math.max(8,Math.min(e.clientX,innerWidth-r.width-8));
+  }
+  div.style.top=top+'px';
+  div.style.left=left+'px';
+}
+function cPop2(e){if(pop&&!pop.contains(e.target)){cPop();document.removeEventListener('click',cPop2);}}
+function cPop(){if(pop){pop.remove();pop=null;}}
+function savePop(id){const m=MISSIONS.find(mm=>mm.id===id);if(!m) return;m.name=document.getElementById('pn').value.trim()||m.name;m.type=document.getElementById('pt').value;m.color=document.getElementById('pc').value||m.color;m.start=document.getElementById('ps').value||m.start;m.end=document.getElementById('pe').value||m.end;m.hc=Math.max(1,parseInt(document.getElementById('ph').value)||1);cPop();render();}
+function delM(id){MISSIONS=MISSIONS.filter(m=>m.id!==id);for(const k of Object.keys(asgn))if(k.startsWith(id+'_'))delete asgn[k];cPop();render();}
+function showAddPilotPop(e){
+  e.stopPropagation();if(pop) pop.remove();
+  const div=document.createElement('div');div.className='pop';
+  div.innerHTML=`
+    <div style="font-weight:700;font-size:12px;margin-bottom:4px">Add Pilot</div>
+    <label>Name</label><input id="ap-name" placeholder="Full Name">
+    <label>Qualifications</label>
+    <div style="display:flex;gap:8px;margin:4px 0">
+      <label style="font-size:11px;display:flex;align-items:center;gap:3px"><input type="checkbox" id="ap-uam"> UAM</label>
+      <label style="font-size:11px;display:flex;align-items:center;gap:3px"><input type="checkbox" id="ap-survey"> Survey</label>
+    </div>
+    <label>First Rotation Start</label><input type="date" id="ap-rot-start" value="${F(sel)}">
+    <label>Status</label>
+    <select id="ap-rot-status">
+      <option value="ON">ON</option>
+      <option value="OFF">OFF</option>
+    </select>
+    <div class="pb">
+      <button class="pcancel" onclick="cPop()">Cancel</button>
+      <button class="psave" onclick="saveAddPilot()">Add</button>
+    </div>
+  `;
+  document.body.appendChild(div);pop=div;
+  popPos(div,e);
+  setTimeout(()=>document.addEventListener('click',cPop2),10);
+}
+function saveAddPilot(){
+  const name=document.getElementById('ap-name').value.trim();
+  if(!name){alert('Enter a name');return;}
+  if(PILOTS.find(p=>p.name===name)){alert('Pilot already exists');return;}
+  const quals=[];
+  if(document.getElementById('ap-uam').checked) quals.push('UAM');
+  if(document.getElementById('ap-survey').checked) quals.push('Survey');
+  const rotStart=document.getElementById('ap-rot-start').value||F(sel);
+  const rotStatus=document.getElementById('ap-rot-status').value;
+  // Create alternating 6-week blocks for the year
+  const rots=[];
+  let cur=new Date(D(rotStart));
+  let st=rotStatus;
+  while(F(cur)<='2026-12-31'){
+    const end=new Date(cur);end.setDate(end.getDate()+41);
+    const eStr=F(end)>'2026-12-31'?'2026-12-31':F(end);
+    rots.push({s:F(cur),e:eStr,st:st});
+    cur=new Date(end);cur.setDate(cur.getDate()+1);
+    st=st==='ON'?'OFF':'ON';
+  }
+  PILOTS.push({name:name,quals:quals,rot:rots,ev:[]});
+  cPop();
+  render();
+}
+function addM(type){type=type||'UAM';const TC={"UAM":["#87CEEB","#5BA3CF","#3A7CA5","#1a3a6b"],"Survey":["#FF8C00","#E65100","#F57C00","#EF6C00"],"Rally":["#ef5350","#e53935","#c62828","#b71c1c"],"Training":["#FF9800","#F57C00","#EF6C00","#E65100"]};const C=TC[type]||TC.UAM;MISSIONS.push({id:nid++,name:"New "+type+" Mission",type:type,start:F(sel),end:addDaysL(F(sel),90),hc:1,color:C[MISSIONS.filter(m=>m.type===type).length%C.length]});render();}
+
+// ====== INIT ======
+const now=new Date();sel=(now>=T0&&now<=T1)?now:new Date(T0);
+render();setTimeout(scr,50);
+</script>
+</body>
+</html>
