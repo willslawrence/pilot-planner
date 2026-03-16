@@ -148,7 +148,7 @@ html.light .h-row { background:#fff; }
 <body>
 
 <div class="header">
-  <h1>🚁 Pilot Availability Planner <span style="font-size:12px;opacity:.6;font-weight:400">V2.62</span></h1>
+  <h1>🚁 Pilot Availability Planner <span style="font-size:12px;opacity:.6;font-weight:400">V2.63</span></h1>
   <div class="ctrls">
     <button class="theme-btn" onclick="toggleTheme()" id="themeBtn" title="Toggle light/dark theme">🌙</button>
     <button onclick="goToday()">Today</button>
@@ -680,13 +680,15 @@ function adHocRows(missions,td){
     for(const m of lane){
       const ml=Math.max(0,dO(D(m.start)))*DW, mw=Math.max(20,(Math.min(td,dO(D(m.end))+1)-Math.max(0,dO(D(m.start))))*DW);
       const mTotalH=titleH+heliH*m.hc;
-      // Title bar
+      // Title bar — same style as regular missions
       barsHtml+=`<div class="mbar" data-mid="${m.id}" style="left:${ml}px;width:${mw}px;height:${titleH}px;top:0;bottom:auto;background:${m.color};border:1px solid ${m.color};border-radius:4px 4px 0 0;cursor:pointer;z-index:2" onclick="showPop(event,${m.id})">
-        <span class="mbar-name" style="color:#fff;font-size:9px">${m.name} ${m.hc>1?m.hc+'x':''}</span>
-        <span class="mbar-date mbar-end" style="color:rgba(255,255,255,.8)">${m.start.slice(5)}→${m.end.slice(5)}</span>
+        ${weekTicksHTML(ml,mw,'rgba(255,255,255,.2)')}
+        <span class="mbar-date mbar-start" style="color:rgba(255,255,255,.9)">${m.start.slice(5)}</span>
+        <span class="mbar-name" style="color:#fff">${m.name}${m.hc>1?' '+m.hc+'x':''}</span>
+        <span class="mbar-date mbar-end" style="color:rgba(255,255,255,.9)">${m.end.slice(5)}</span>
       </div>`;
       // Heli lane backgrounds
-      barsHtml+=`<div style="position:absolute;left:${ml}px;width:${mw}px;top:${titleH}px;height:${heliH*m.hc}px;background:${m.color};border-left:1px solid ${m.color};border-right:1px solid ${m.color};border-bottom:1px solid ${m.color};border-radius:0 0 4px 4px;pointer-events:none;z-index:0"></div>`;
+      barsHtml+=`<div style="position:absolute;left:${ml}px;width:${mw}px;top:${titleH}px;height:${heliH*m.hc}px;background:${m.color};border-left:1px solid ${m.color};border-right:1px solid ${m.color};border-bottom:1px solid ${m.color};border-radius:0 0 4px 4px;pointer-events:none;z-index:0">${weekTicksHTML(ml,mw,'rgba(255,255,255,.15)')}</div>`;
       // Per-heli drop zones and assignment bars
       for(let hi=0;hi<m.hc;hi++){
         const laneTop=titleH+hi*heliH;
