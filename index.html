@@ -226,7 +226,7 @@ async function fetchFromAPI() {
     }
     
     MISSIONS = data.missions.filter(mission => mission.MissionID && mission.Name).map(mission => ({
-      id: parseInt(mission.MissionID),
+      id: mission.MissionID,
       name: mission.Name,
       type: mission.Type || 'UAM',
       start: parseDateFromISO(mission.Start) || '2026-01-01',
@@ -246,9 +246,12 @@ async function fetchFromAPI() {
         return;
       }
       const heliSlotNum = assignment.HeliSlot.includes('heli-') ? 
-        assignment.HeliSlot.replace('heli-', '') : 
+        String(parseInt(assignment.HeliSlot.replace('heli-', '')) - 1) : 
         assignment.HeliSlot.replace(/\D/g, '') || '0';
-      const key = `${assignment.MissionID}_${heliSlotNum}`;
+      // Find mission by MissionID to get its internal id
+      const mission = MISSIONS.find(m => m.id === assignment.MissionID);
+      if (!mission) { console.warn('No mission for assignment:', assignment.MissionID); return; }
+      const key = `${mission.id}_${heliSlotNum}`;
       if (!apiAssignments[key]) apiAssignments[key] = [];
       apiAssignments[key].push({
         pilot: assignment.Pilot,
@@ -279,7 +282,7 @@ async function commitToAPI() {
         rows.push([
           assignment.pilot,
           missionID,
-          `heli-${heliSlot}`,
+          `heli-${parseInt(heliSlot) + 1}`,
           assignment.start,
           assignment.end,
           timestamp
@@ -516,7 +519,9 @@ async function resetFromAPI() {
 }
 
 function updateNid() {
-  nid = Math.max(1, ...MISSIONS.map(m => m.id)) + 1;
+  // For string IDs from API, nid is used for new missions created in planner
+  const numericIds = MISSIONS.map(m => typeof m.id === 'number' ? m.id : 0);
+  nid = Math.max(1, ...numericIds) + 1;
 }
 
 // ====== MODIFIED DATA INITIALIZATION ======
@@ -601,7 +606,7 @@ let sel=new Date(), pop=null;
 
 function isOn(p,ds){for(const r of p.rot)if(ds>=r.s&&ds<=r.e&&(r.st==='ON'||r.st==='WORKOVER'))return true;return false;}
 function getRotStatus(p,ds){for(const r of p.rot)if(ds>=r.s&&ds<=r.e)return r.st;return 'OFF';}
-function pg(p){if(p.mg) return 'mg';const u=p.quals.includes('UAM'),s=p.quals.includes('Survey');return u&&s?'both':u?'uam':'survey';}
+function pg(p){if(p.mg) return 'mg';const cats=p.quals.join(' ');const u=cats.includes('UAM'),s=cats.includes('Survey');return u&&s?'both':u?'uam':'survey';}
 const PILOT_COLORS=JSON.parse(localStorage.getItem('pp_pilotColors')||'null')||{uam:'#87CEEB',both:'#1a3a6b',survey:'#FF8C00',mg:'#9CA3AF'};
 function gc(g){return PILOT_COLORS[g]||'#888';}
 function savePilotColors(){localStorage.setItem('pp_pilotColors',JSON.stringify(PILOT_COLORS));}
@@ -614,9 +619,10 @@ function busy(name,s,e,xm,xh){
   for(const[k,arr]of Object.entries(asgn)){
     for(const a of arr){
       if(a.pilot===name && a.end>=s && a.start<=e){
-        const p=k.split('_').map(Number);
-        if(p[0]===xm&&p[1]===xh) continue;
-        return MISSIONS.find(m=>m.id===p[0])?.name||true;
+        const p=k.split('_');
+        const pMid=p[0], pHi=parseInt(p[1]);
+        if(pMid===xm&&pHi===xh) continue;
+        return MISSIONS.find(m=>String(m.id)===String(pMid))?.name||true;
       }
     }
   }
@@ -643,9 +649,10 @@ function pAs(name){
     if(k.includes('_sp'))continue;
     for(const a of arr){
       if(a.pilot===name){
-        const p=k.split('_').map(Number);
-        const m=MISSIONS.find(mm=>mm.id===p[0]);
-        r.push({...a,mid:p[0],hi:p[1],color:m?.color||'#666',mname:m?.name||'?'});
+        const p=k.split('_');
+        const pMid=p[0], pHi=parseInt(p[1]);
+        const m=MISSIONS.find(mm=>String(mm.id)===String(pMid));
+        r.push({...a,mid:pMid,hi:pHi,color:m?.color||'#666',mname:m?.name||'?'});
       }
     }
   }
@@ -771,7 +778,7 @@ function render(){
   const uamP=PILOTS.filter(p=>pg(p)==='uam'), bothP=PILOTS.filter(p=>pg(p)==='both'), survP=PILOTS.filter(p=>pg(p)==='survey');
 
   // Missions by type
-  const uam=MISSIONS.filter(m=>m.type==='UAM'), surv=MISSIONS.filter(m=>m.type==='Survey'), trn=MISSIONS.filter(m=>m.type==='Training'), rally=MISSIONS.filter(m=>m.type==='Rally');
+  const uam=MISSIONS.filter(m=>m.type==='UAM'), surv=MISSIONS.filter(m=>m.type==='Survey'), trn=MISSIONS.filter(m=>m.type==='Training'), rally=MISSIONS.filter(m=>m.type==='Rally'||m.type==='Ad Hoc');
 
   // UAM Missions
   html+=secRow('UAM Missions','var(--green)',td);
@@ -784,7 +791,7 @@ function render(){
   const pairOrder=[
     ['Will Lawrence','Stephan Mayer'],
     ['David Leipsig','Nathan Piper'],
-    ['Lisa le Roux','Ivona Redlinska'],
+    ['Lisa le Roux','Iwona Redlinska'],
     ['Rohit Kaundinya','Lindsay Pentz'],
     ['David Schicht','Kevin Allen'],
     ['Dan Munteanu','Marius Hertz'],
@@ -796,7 +803,7 @@ function render(){
   // Category groups with sub-headers
   const catGroups=[
     {label:'Management',color:PILOT_COLORS.mg||'#9CA3AF',pairs:[['Will Lawrence','Roberto Piani']]},
-    {label:'UAM',color:PILOT_COLORS.uam,pairs:[['Stephan Mayer'],['David Leipsig','Nathan Piper'],['Lisa le Roux','Ivona Redlinska'],['Rohit Kaundinya','Lindsay Pentz']]},
+    {label:'UAM',color:PILOT_COLORS.uam,pairs:[['Stephan Mayer'],['David Leipsig','Nathan Piper'],['Lisa le Roux','Iwona Redlinska'],['Rohit Kaundinya','Lindsay Pentz']]},
     {label:'UAM + Survey',color:PILOT_COLORS.both,pairs:[['David Schicht','Kevin Allen']]},
     {label:'Survey',color:PILOT_COLORS.survey,pairs:[['Dan Munteanu','Marius Hertz'],['Julio Bonet',"Matt O'Brien"]]},
   ];
@@ -877,7 +884,7 @@ function missionRows(m,td){
 
   // Build helicopter lane labels
   let labelHtml = `<div style="display:flex;flex-direction:column;height:100%">`;
-  labelHtml += `<div style="font-weight:600;font-size:11px;color:${m.color};cursor:pointer;height:${titleH}px;display:flex;align-items:center" onclick="showPop(event,${m.id})">● ${m.name} <span style="font-weight:400;font-size:9px;opacity:.6;margin-left:4px">${m.hc}x</span></div>`;
+  labelHtml += `<div style="font-weight:600;font-size:11px;color:${m.color};cursor:pointer;height:${titleH}px;display:flex;align-items:center" onclick="showPop(event,'${m.id}')">● ${m.name} <span style="font-weight:400;font-size:9px;opacity:.6;margin-left:4px">${m.hc}x</span></div>`;
   for(let hi=0;hi<m.hc;hi++){
     labelHtml+=`<div style="font-size:9px;color:var(--muted);height:${laneH}px;display:flex;align-items:center;padding-left:8px">🚁 ${hi+1}</div>`;
   }
@@ -945,7 +952,7 @@ function missionRows(m,td){
         <span class="abar-grip abar-grip-l" data-edge="start" data-apilot="${a.pilot}" data-astart="${a.start}" data-aend="${a.end}" data-amid="${m.id}" data-ahi="${hi}"></span>
         <span class="abar-date abar-date-l">${a.start.slice(5)}</span>${fn}<span class="abar-date abar-date-r">${a.end.slice(5)}</span>
         <span class="abar-grip abar-grip-r" data-edge="end" data-apilot="${a.pilot}" data-astart="${a.start}" data-aend="${a.end}" data-amid="${m.id}" data-ahi="${hi}"></span>
-        <span class="ax" onclick="event.stopPropagation();remAs(${m.id},${hi},'${safeP}','${a.start}');render()">×</span>
+        <span class="ax" onclick="event.stopPropagation();remAs('${m.id}',${hi},'${safeP}','${a.start}');render()">×</span>
       </div>`;
     }
   }
@@ -986,7 +993,7 @@ function adHocRows(missions,td){
       const ml=Math.max(0,dO(D(m.start)))*DW, mw=Math.max(20,(Math.min(td,dO(D(m.end))+1)-Math.max(0,dO(D(m.start))))*DW);
       const mTotalH=titleH+heliH*m.hc;
       // Title bar — same style as regular missions
-      barsHtml+=`<div class="mbar" data-mid="${m.id}" style="left:${ml}px;width:${mw}px;height:${titleH}px;top:0;bottom:auto;background:${m.color};border:1px solid ${m.color};border-radius:4px 4px 0 0;cursor:pointer;z-index:2" onclick="showPop(event,${m.id})">
+      barsHtml+=`<div class="mbar" data-mid="${m.id}" style="left:${ml}px;width:${mw}px;height:${titleH}px;top:0;bottom:auto;background:${m.color};border:1px solid ${m.color};border-radius:4px 4px 0 0;cursor:pointer;z-index:2" onclick="showPop(event,'${m.id}')">
         ${weekTicksHTML(ml,mw,'rgba(255,255,255,.2)')}
         <span class="mbar-date mbar-start" style="color:rgba(255,255,255,.9)">${m.start.slice(5)}</span>
         <span class="mbar-name" style="color:#fff">${m.name}${m.hc>1?' '+m.hc+'x':''}</span>
@@ -1010,7 +1017,7 @@ function adHocRows(missions,td){
             <span class="abar-grip abar-grip-l" data-edge="start" data-apilot="${a.pilot}" data-astart="${a.start}" data-aend="${a.end}" data-amid="${m.id}" data-ahi="${hi}"></span>
             <span class="abar-date abar-date-l">${a.start.slice(5)}</span>${fn}<span class="abar-date abar-date-r">${a.end.slice(5)}</span>
             <span class="abar-grip abar-grip-r" data-edge="end" data-apilot="${a.pilot}" data-astart="${a.start}" data-aend="${a.end}" data-amid="${m.id}" data-ahi="${hi}"></span>
-            <span class="ax" onclick="event.stopPropagation();remAs(${m.id},${hi},'${safeP}','${a.start}');render()">×</span>
+            <span class="ax" onclick="event.stopPropagation();remAs('${m.id}',${hi},'${safeP}','${a.start}');render()">×</span>
           </div>`;
         }
       }
@@ -1289,7 +1296,7 @@ function setupAssignmentClicks(){
     bar.addEventListener('click',e=>{
       if(e.target.closest('.ax')) return;
       e.stopPropagation();
-      const mid=parseInt(bar.dataset.amid);
+      const mid=bar.dataset.amid;
       const hi=parseInt(bar.dataset.ahi);
       const pilot=bar.dataset.apilot;
       const start=bar.dataset.astart;
@@ -1343,7 +1350,7 @@ function drawHandoffLines(){
       for(let i=0;i<arr.length-1;i++){
         const a1=arr[i], a2=arr[i+1];
         if(a1.pilot===a2.pilot) continue;
-        if(m.type==='Rally') continue; // No handoff lines for Ad Hoc missions
+        if(m.type==='Rally'||m.type==='Ad Hoc') continue; // No handoff lines for Ad Hoc missions
         const gap=dB(D(a1.end),D(a2.start));
         if(gap>1) continue;
 
@@ -1472,7 +1479,7 @@ function setupMissionDrag(){
     bar.addEventListener('mousedown',e=>{
       if(e.target.closest('.ax')) return;
       e.preventDefault();e.stopPropagation();
-      const mid=parseInt(bar.dataset.mid);
+      const mid=bar.dataset.mid;
       const m=MISSIONS.find(mm=>mm.id===mid);if(!m) return;
       const startX=e.clientX;
       const origStart=m.start,origEnd=m.end;
@@ -1501,7 +1508,7 @@ function setupAssignmentResize(){
       const pilot=grip.dataset.apilot;
       const origStart=grip.dataset.astart;
       const origEnd=grip.dataset.aend;
-      const mid=parseInt(grip.dataset.amid);
+      const mid=grip.dataset.amid;
       const hi=parseInt(grip.dataset.ahi);
       const startX=isTouch?e.touches[0].clientX:e.clientX;
       let lastDayShift=0;
@@ -1544,7 +1551,7 @@ function setupAssignmentResize(){
       const pilot=bar.dataset.apilot;
       const start=bar.dataset.astart;
       const end=bar.dataset.aend;
-      const mid=parseInt(bar.dataset.amid);
+      const mid=bar.dataset.amid;
       const hi=parseInt(bar.dataset.ahi);
       const k=sk(mid,hi);
       if(!asgn[k]) return;
@@ -1578,7 +1585,7 @@ function setupAssignmentResize(){
       const pilot=bar.dataset.apilot;
       const origStart=bar.dataset.astart;
       const origEnd=bar.dataset.aend;
-      const mid=parseInt(bar.dataset.amid);
+      const mid=bar.dataset.amid;
       const hi=parseInt(bar.dataset.ahi);
       const startX=e.clientX;
       const duration=dB(D(origStart),D(origEnd));
@@ -1671,7 +1678,7 @@ function setupDrops(){
   const ms=document.getElementById('mscroll');
   if(ms) ms.addEventListener('dragover',e=>e.preventDefault());
   document.querySelectorAll('.h-drop').forEach(zone=>{
-    const mid=parseInt(zone.dataset.mid),hi=parseInt(zone.dataset.hi);
+    const mid=zone.dataset.mid,hi=parseInt(zone.dataset.hi);
     zone.addEventListener('dragover',e=>{e.preventDefault();e.stopPropagation();zone.style.background='rgba(76,175,80,.12)';});
     zone.addEventListener('dragleave',e=>{zone.style.background='';});
     zone.addEventListener('drop',e=>{e.stopPropagation();zone.style.background='';handleDrop(e,mid,hi);});
@@ -1738,7 +1745,7 @@ function showPop(e,id){
   e.stopPropagation();if(pop) pop.remove();
   const m=MISSIONS.find(mm=>mm.id===id);if(!m) return;
   const div=document.createElement('div');div.className='pop';
-  div.innerHTML=`<label>Name</label><input id="pn" value="${m.name}"><label>Type</label><select id="pt"><option value="UAM"${m.type==='UAM'?' selected':''}>UAM</option><option value="Survey"${m.type==='Survey'?' selected':''}>Survey</option><option value="Training"${m.type==='Training'?' selected':''}>Training</option><option value="Rally"${m.type==='Rally'?' selected':''}>Ad Hoc</option></select><label>Color</label><input type="color" id="pc" value="${m.color}" style="height:32px;padding:2px;cursor:pointer"><label>Start</label><input type="date" id="ps" value="${m.start}"><label>End</label><input type="date" id="pe" value="${m.end}"><label>Helicopters</label><input type="number" id="ph" value="${m.hc}" min="1" max="10"><div class="pb"><button class="pdel" onclick="delM(${m.id})">Delete</button><button class="pcancel" onclick="cPop()">Cancel</button><button class="psave" onclick="savePop(${m.id})">Save</button></div>`;
+  div.innerHTML=`<label>Name</label><input id="pn" value="${m.name}"><label>Type</label><select id="pt"><option value="UAM"${m.type==='UAM'?' selected':''}>UAM</option><option value="Survey"${m.type==='Survey'?' selected':''}>Survey</option><option value="Training"${m.type==='Training'?' selected':''}>Training</option><option value="Rally"${m.type==='Rally'?' selected':''}>Ad Hoc (Rally)</option><option value="Ad Hoc"${m.type==='Ad Hoc'?' selected':''}>Ad Hoc</option></select><label>Color</label><input type="color" id="pc" value="${m.color}" style="height:32px;padding:2px;cursor:pointer"><label>Start</label><input type="date" id="ps" value="${m.start}"><label>End</label><input type="date" id="pe" value="${m.end}"><label>Helicopters</label><input type="number" id="ph" value="${m.hc}" min="1" max="10"><div class="pb"><button class="pdel" onclick="delM('${m.id}')">Delete</button><button class="pcancel" onclick="cPop()">Cancel</button><button class="psave" onclick="savePop('${m.id}')">Save</button></div>`;
   document.body.appendChild(div);pop=div;
   const popRect=div.getBoundingClientRect();
   div.style.top=Math.max(8,Math.min(e.clientY+5,innerHeight-popRect.height-8))+'px';
