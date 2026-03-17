@@ -148,7 +148,7 @@ html.light .h-row { background:#fff; }
 <body>
 
 <div class="header">
-  <h1>🚁 Pilot Availability Planner <span style="font-size:12px;opacity:.6;font-weight:400">V2.63</span></h1>
+  <h1>🚁 Pilot Availability Planner <span style="font-size:12px;opacity:.6;font-weight:400">V3.00</span></h1>
   <div class="ctrls">
     <button class="theme-btn" onclick="toggleTheme()" id="themeBtn" title="Toggle light/dark theme">🌙</button>
     <button onclick="goToday()">Today</button>
@@ -157,7 +157,8 @@ html.light .h-row { background:#fff; }
     <button onclick="shf(7)">Wk ▶</button>
     <button onclick="shf(-30)">◀ Mo</button>
     <button onclick="shf(30)">Mo ▶</button>
-    <button onclick="if(confirm('Clear all pilot assignments?')){asgn={};saveData();render();}" title="Reset all assignments">🗑️ Reset</button>
+    <button id="commitBtn" onclick="commitChanges()" title="Save changes to Google Sheets" style="position:relative;">💾 Commit</button>
+    <button onclick="resetFromAPI()" title="Reload from Google Sheets and discard uncommitted changes">🗑️ Reset</button>
   </div>
 </div>
 
@@ -178,26 +179,352 @@ html.light .h-row { background:#fff; }
 </div>
 
 <script>
-// ====== DATA ======
-const PILOTS = [
-  {name:"Will Lawrence",quals:["UAM"],rot:[{s:"2026-01-01",e:"2026-12-31",st:"ON"}],ev:[{d:"2026-03-06",n:"AL"},{d:"2026-03-07",n:"AL"},{d:"2026-03-08",n:"AL"},{d:"2026-03-09",n:"AL"},{d:"2026-03-10",n:"AL"},{d:"2026-03-11",n:"AL"},{d:"2026-03-12",n:"AL"},{d:"2026-03-13",n:"AL"},{d:"2026-03-14",n:"AL"},{d:"2026-03-15",n:"AL"},{d:"2026-03-16",n:"AL"}],mg:1},
-  {name:"Nathan Piper",quals:["UAM"],rot:[{s:"2026-01-01",e:"2026-01-06",st:"ON"},{s:"2026-01-07",e:"2026-02-17",st:"OFF"},{s:"2026-02-18",e:"2026-03-31",st:"ON"},{s:"2026-04-01",e:"2026-05-12",st:"OFF"},{s:"2026-05-13",e:"2026-06-23",st:"ON"},{s:"2026-06-24",e:"2026-08-04",st:"OFF"},{s:"2026-08-05",e:"2026-09-15",st:"ON"},{s:"2026-09-16",e:"2026-10-27",st:"OFF"},{s:"2026-10-28",e:"2026-12-08",st:"WORKOVER"},{s:"2026-12-09",e:"2026-12-31",st:"OFF"}],ev:[]},
-  {name:"David Leipsig",quals:["UAM"],rot:[{s:"2026-01-01",e:"2026-01-06",st:"OFF"},{s:"2026-01-07",e:"2026-02-17",st:"ON"},{s:"2026-02-18",e:"2026-03-31",st:"OFF"},{s:"2026-04-01",e:"2026-05-12",st:"ON"},{s:"2026-05-13",e:"2026-06-23",st:"OFF"},{s:"2026-06-24",e:"2026-08-04",st:"ON"},{s:"2026-08-05",e:"2026-09-15",st:"OFF"},{s:"2026-09-16",e:"2026-10-27",st:"WORKOVER"},{s:"2026-10-28",e:"2026-12-08",st:"OFF"},{s:"2026-12-09",e:"2026-12-31",st:"WORKOVER"}],ev:[]},
-  {name:"Lisa le Roux",quals:["UAM"],rot:[{s:"2026-01-01",e:"2026-01-27",st:"OFF"},{s:"2026-01-28",e:"2026-03-10",st:"ON"},{s:"2026-03-11",e:"2026-04-21",st:"OFF"},{s:"2026-04-22",e:"2026-06-02",st:"ON"},{s:"2026-06-03",e:"2026-07-14",st:"OFF"},{s:"2026-07-15",e:"2026-08-25",st:"ON"},{s:"2026-08-26",e:"2026-10-06",st:"OFF"},{s:"2026-10-07",e:"2026-11-17",st:"WORKOVER"},{s:"2026-11-18",e:"2026-12-29",st:"OFF"},{s:"2026-12-30",e:"2026-12-31",st:"WORKOVER"}],ev:[]},
-  {name:"Ivona Redlinska",quals:["UAM"],rot:[{s:"2026-01-01",e:"2026-01-11",st:"ON"},{s:"2026-01-12",e:"2026-03-10",st:"OFF"},{s:"2026-03-11",e:"2026-04-13",st:"ON"},{s:"2026-04-14",e:"2026-06-02",st:"OFF"},{s:"2026-06-03",e:"2026-07-14",st:"ON"},{s:"2026-07-15",e:"2026-08-25",st:"OFF"},{s:"2026-08-26",e:"2026-10-06",st:"WORKOVER"},{s:"2026-10-07",e:"2026-11-17",st:"OFF"},{s:"2026-11-18",e:"2026-12-29",st:"WORKOVER"},{s:"2026-12-30",e:"2026-12-31",st:"OFF"}],ev:[]},
-  {name:"Lindsay Pentz",quals:["UAM"],rot:[{s:"2026-01-01",e:"2026-01-20",st:"ON"},{s:"2026-01-21",e:"2026-03-03",st:"OFF"},{s:"2026-03-04",e:"2026-04-14",st:"ON"},{s:"2026-04-15",e:"2026-05-26",st:"OFF"},{s:"2026-05-27",e:"2026-07-07",st:"ON"},{s:"2026-07-08",e:"2026-08-18",st:"OFF"},{s:"2026-08-19",e:"2026-09-29",st:"WORKOVER"},{s:"2026-09-30",e:"2026-11-10",st:"OFF"},{s:"2026-11-11",e:"2026-12-22",st:"WORKOVER"},{s:"2026-12-23",e:"2026-12-31",st:"OFF"}],ev:[]},
-  {name:"Stephan Mayer",quals:["UAM"],rot:[{s:"2026-01-01",e:"2026-02-08",st:"ON"},{s:"2026-02-09",e:"2026-03-20",st:"OFF"},{s:"2026-03-21",e:"2026-05-01",st:"ON"},{s:"2026-05-02",e:"2026-06-12",st:"OFF"},{s:"2026-06-13",e:"2026-06-26",st:"ON"},{s:"2026-06-27",e:"2026-09-04",st:"OFF"},{s:"2026-09-05",e:"2026-10-16",st:"ON"},{s:"2026-10-17",e:"2026-11-27",st:"OFF"},{s:"2026-11-28",e:"2026-12-31",st:"ON"}],ev:[]},
-  {name:"Rohit Kaundinya",quals:["UAM"],rot:[{s:"2026-01-01",e:"2026-01-20",st:"OFF"},{s:"2026-01-21",e:"2026-03-03",st:"ON"},{s:"2026-03-04",e:"2026-04-14",st:"OFF"},{s:"2026-04-15",e:"2026-05-26",st:"ON"},{s:"2026-05-27",e:"2026-07-07",st:"OFF"},{s:"2026-07-08",e:"2026-08-18",st:"ON"},{s:"2026-08-19",e:"2026-09-29",st:"OFF"},{s:"2026-09-30",e:"2026-11-10",st:"WORKOVER"},{s:"2026-11-11",e:"2026-12-22",st:"OFF"},{s:"2026-12-23",e:"2026-12-31",st:"WORKOVER"}],ev:[]},
-  {name:"David Schicht",quals:["UAM","Survey"],rot:[{s:"2026-01-01",e:"2026-01-26",st:"OFF"},{s:"2026-01-27",e:"2026-03-09",st:"ON"},{s:"2026-03-10",e:"2026-04-20",st:"OFF"},{s:"2026-04-21",e:"2026-06-01",st:"ON"},{s:"2026-06-02",e:"2026-07-13",st:"OFF"},{s:"2026-07-14",e:"2026-08-24",st:"ON"},{s:"2026-08-25",e:"2026-10-05",st:"OFF"},{s:"2026-10-06",e:"2026-11-16",st:"WORKOVER"},{s:"2026-11-17",e:"2026-12-28",st:"OFF"},{s:"2026-12-29",e:"2026-12-31",st:"WORKOVER"}],ev:[]},
-  {name:"Kevin Allen",quals:["UAM","Survey"],rot:[{s:"2026-01-01",e:"2026-01-26",st:"ON"},{s:"2026-01-27",e:"2026-03-09",st:"OFF"},{s:"2026-03-10",e:"2026-04-20",st:"ON"},{s:"2026-04-21",e:"2026-06-01",st:"OFF"},{s:"2026-06-02",e:"2026-07-13",st:"ON"},{s:"2026-07-14",e:"2026-08-24",st:"OFF"},{s:"2026-08-25",e:"2026-10-05",st:"WORKOVER"},{s:"2026-10-06",e:"2026-11-16",st:"OFF"},{s:"2026-11-17",e:"2026-12-28",st:"WORKOVER"},{s:"2026-12-29",e:"2026-12-31",st:"OFF"}],ev:[]},
-  {name:"Marius Hertz",quals:["Survey"],rot:[{s:"2026-01-01",e:"2026-01-29",st:"ON"},{s:"2026-01-30",e:"2026-03-12",st:"OFF"},{s:"2026-03-13",e:"2026-04-23",st:"ON"},{s:"2026-04-24",e:"2026-06-04",st:"OFF"},{s:"2026-06-05",e:"2026-07-16",st:"ON"},{s:"2026-07-17",e:"2026-08-27",st:"OFF"},{s:"2026-08-28",e:"2026-10-08",st:"WORKOVER"},{s:"2026-10-09",e:"2026-11-19",st:"OFF"},{s:"2026-11-20",e:"2026-12-31",st:"WORKOVER"}],ev:[]},
-  {name:"Dan Munteanu",quals:["Survey"],rot:[{s:"2026-01-01",e:"2026-01-29",st:"OFF"},{s:"2026-01-30",e:"2026-03-12",st:"ON"},{s:"2026-03-13",e:"2026-04-23",st:"OFF"},{s:"2026-04-24",e:"2026-06-04",st:"ON"},{s:"2026-06-05",e:"2026-07-16",st:"OFF"},{s:"2026-07-17",e:"2026-08-27",st:"ON"},{s:"2026-08-28",e:"2026-10-08",st:"OFF"},{s:"2026-10-09",e:"2026-11-19",st:"WORKOVER"},{s:"2026-11-20",e:"2026-12-31",st:"OFF"}],ev:[]},
-  {name:"Julio Bonet",quals:["Survey"],rot:[{s:"2026-01-01",e:"2026-01-18",st:"OFF"},{s:"2026-01-19",e:"2026-03-01",st:"ON"},{s:"2026-03-02",e:"2026-04-12",st:"OFF"},{s:"2026-04-13",e:"2026-05-24",st:"ON"},{s:"2026-05-25",e:"2026-07-06",st:"OFF"},{s:"2026-07-07",e:"2026-08-17",st:"ON"},{s:"2026-08-18",e:"2026-09-28",st:"OFF"},{s:"2026-09-29",e:"2026-11-09",st:"WORKOVER"},{s:"2026-11-10",e:"2026-12-21",st:"OFF"},{s:"2026-12-22",e:"2026-12-31",st:"WORKOVER"}],ev:[]},
-  {name:"Matt O'Brien",quals:["Survey"],rot:[{s:"2026-01-01",e:"2026-01-28",st:"ON"},{s:"2026-01-29",e:"2026-03-11",st:"OFF"},{s:"2026-03-12",e:"2026-04-22",st:"ON"},{s:"2026-04-23",e:"2026-06-03",st:"OFF"},{s:"2026-06-04",e:"2026-07-15",st:"ON"},{s:"2026-07-16",e:"2026-08-26",st:"OFF"},{s:"2026-08-27",e:"2026-10-07",st:"WORKOVER"},{s:"2026-10-08",e:"2026-11-18",st:"OFF"},{s:"2026-11-19",e:"2026-12-30",st:"WORKOVER"},{s:"2026-12-31",e:"2026-12-31",st:"OFF"}],ev:[]},
-  {name:"Roberto Piani",quals:["UAM","Survey"],rot:[{s:"2026-01-01",e:"2026-12-31",st:"ON"}],ev:[],mg:1},
-];
+// ====== API CONFIGURATION ======
+const BASE_URL = "https://script.google.com/macros/s/AKfycbx2PG54ptMJw3eJW2vxNrvRJOaJVfXzOQYnJg-qHbV0vrBU1W16tq2lpGKlVfVXVpyX6w/exec";
 
-let MISSIONS = [
+// ====== GLOBAL STATE ======
+let PILOTS = [];
+let MISSIONS = [];
+let ROTATIONS = [];
+let ORIGINAL_ASSIGNMENTS = {}; // Store original state for dirty checking
+let lastCommitTime = null;
+let isDirty = false;
+
+// ====== API FUNCTIONS ======
+async function fetchFromAPI() {
+  try {
+    const response = await fetch(`${BASE_URL}?action=readAll`);
+    if (!response.ok) throw new Error(`HTTP ${response.status}`);
+    const data = await response.json();
+    
+    // Parse the data from the API
+    PILOTS = data.pilots.filter(pilot => pilot.Name).map(pilot => ({
+      name: pilot.Name,
+      quals: pilot.Category ? pilot.Category.split(',').map(q => q.trim()).filter(q => q) : [],
+      displayName: pilot.DisplayName || pilot.Name,
+      fleetplanID: pilot.FleetplanID,
+      pairGroup: pilot.PairGroup,
+      management: pilot.Management,
+      mg: pilot.Management ? 1 : 0,
+      rot: [], // Will be populated from rotations data
+      ev: [] // Events - keep empty for now
+    }));
+    
+    // Build rotation data
+    ROTATIONS = data.rotations.filter(rotation => rotation.Pilot && rotation.Type).map(rotation => ({
+      pilot: rotation.Pilot,
+      type: rotation.Type,
+      start: parseDateFromISO(rotation.Start),
+      end: parseDateFromISO(rotation.End),
+      fleetplanID: rotation.FleetplanID,
+      lastSynced: rotation.LastSynced
+    }));
+    
+    // Convert rotations to the pilot rot format
+    for (const pilot of PILOTS) {
+      pilot.rot = buildRotationsForPilot(pilot.name, ROTATIONS);
+    }
+    
+    MISSIONS = data.missions.filter(mission => mission.MissionID && mission.Name).map(mission => ({
+      id: parseInt(mission.MissionID),
+      name: mission.Name,
+      type: mission.Type || 'UAM',
+      start: parseDateFromISO(mission.Start) || '2026-01-01',
+      end: parseDateFromISO(mission.End) || '2026-12-31',
+      hc: parseInt(mission.Helicopters) || 1,
+      color: mission.Color || getDefaultMissionColor(mission.Type || 'UAM'),
+      status: mission.Status,
+      obsidianFile: mission.ObsidianFile,
+      lastSynced: mission.LastSynced
+    }));
+    
+    // Build assignments
+    const apiAssignments = {};
+    data.assignments.forEach(assignment => {
+      if (!assignment.MissionID || !assignment.HeliSlot || !assignment.Pilot) {
+        console.warn('Skipping invalid assignment:', assignment);
+        return;
+      }
+      const heliSlotNum = assignment.HeliSlot.includes('heli-') ? 
+        assignment.HeliSlot.replace('heli-', '') : 
+        assignment.HeliSlot.replace(/\D/g, '') || '0';
+      const key = `${assignment.MissionID}_${heliSlotNum}`;
+      if (!apiAssignments[key]) apiAssignments[key] = [];
+      apiAssignments[key].push({
+        pilot: assignment.Pilot,
+        start: parseDateFromISO(assignment.Start),
+        end: parseDateFromISO(assignment.End)
+      });
+    });
+    
+    // Store original state for dirty checking
+    ORIGINAL_ASSIGNMENTS = JSON.parse(JSON.stringify(apiAssignments));
+    return apiAssignments;
+    
+  } catch (error) {
+    console.error('Failed to fetch from API:', error);
+    throw error;
+  }
+}
+
+async function commitToAPI() {
+  try {
+    // Build rows for the API
+    const rows = [];
+    const timestamp = new Date().toISOString();
+    
+    for (const [key, assignments] of Object.entries(asgn)) {
+      const [missionID, heliSlot] = key.split('_');
+      for (const assignment of assignments) {
+        rows.push([
+          assignment.pilot,
+          missionID,
+          `heli-${heliSlot}`,
+          assignment.start,
+          assignment.end,
+          timestamp
+        ]);
+      }
+    }
+    
+    const response = await fetch(`${BASE_URL}?action=write&sheet=Assignments`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ rows })
+    });
+    
+    if (!response.ok) throw new Error(`HTTP ${response.status}`);
+    const result = await response.json();
+    
+    if (result.success) {
+      // Update original state and clear dirty flag
+      ORIGINAL_ASSIGNMENTS = JSON.parse(JSON.stringify(asgn));
+      lastCommitTime = new Date();
+      updateDirtyState();
+      return result;
+    } else {
+      throw new Error('API returned failure');
+    }
+  } catch (error) {
+    console.error('Failed to commit to API:', error);
+    throw error;
+  }
+}
+
+// ====== UTILITY FUNCTIONS ======
+function parseDateFromISO(isoString) {
+  if (!isoString) return null;
+  const date = new Date(isoString);
+  return F(date); // Convert to YYYY-MM-DD format
+}
+
+function buildRotationsForPilot(pilotName, rotations) {
+  const pilotRotations = rotations.filter(r => r.pilot === pilotName);
+  const result = [];
+  
+  // Convert rotation data to the format expected by the app
+  for (const rotation of pilotRotations) {
+    if (rotation.type === 'OFF' || rotation.type === 'VACATION') {
+      result.push({
+        s: rotation.start,
+        e: rotation.end,
+        st: 'OFF'
+      });
+    }
+  }
+  
+  // Fill gaps with ON periods for 2026
+  const year2026Start = '2026-01-01';
+  const year2026End = '2026-12-31';
+  
+  if (result.length === 0) {
+    // No OFF periods, entire year is ON
+    result.push({ s: year2026Start, e: year2026End, st: 'ON' });
+  } else {
+    // Sort OFF periods by start date
+    result.sort((a, b) => a.s.localeCompare(b.s));
+    
+    const onPeriods = [];
+    let currentDate = year2026Start;
+    
+    for (const offPeriod of result) {
+      if (currentDate < offPeriod.s) {
+        // Add ON period before this OFF period
+        onPeriods.push({
+          s: currentDate,
+          e: addDaysL(offPeriod.s, -1),
+          st: 'ON'
+        });
+      }
+      currentDate = addDaysL(offPeriod.e, 1);
+    }
+    
+    // Add final ON period if needed
+    if (currentDate <= year2026End) {
+      onPeriods.push({
+        s: currentDate,
+        e: year2026End,
+        st: 'ON'
+      });
+    }
+    
+    // Combine OFF and ON periods and sort
+    result.push(...onPeriods);
+    result.sort((a, b) => a.s.localeCompare(b.s));
+  }
+  
+  return result;
+}
+
+function getDefaultMissionColor(type) {
+  const colors = {
+    UAM: ['#87CEEB', '#5BA3CF', '#3A7CA5', '#1a3a6b'],
+    Survey: ['#FF8C00', '#E65100', '#F57C00', '#EF6C00'],
+    Rally: ['#ef5350', '#e53935', '#c62828', '#b71c1c'],
+    Training: ['#FF9800', '#F57C00', '#EF6C00', '#E65100'],
+    'Ad Hoc': ['#ef5350', '#e53935', '#c62828', '#b71c1c'] // Map Ad Hoc to Rally colors
+  };
+  const typeColors = colors[type] || colors.UAM;
+  return typeColors[0]; // Return first color as default
+}
+
+function updateDirtyState() {
+  const currentState = JSON.stringify(asgn);
+  const originalState = JSON.stringify(ORIGINAL_ASSIGNMENTS);
+  isDirty = currentState !== originalState;
+  
+  const commitBtn = document.getElementById('commitBtn');
+  if (commitBtn) {
+    if (isDirty) {
+      commitBtn.style.color = '#FF9800';
+      commitBtn.innerHTML = '💾 Commit <span style="color:#FF9800;">●</span>';
+    } else {
+      commitBtn.style.color = '';
+      commitBtn.innerHTML = '💾 Commit';
+    }
+  }
+}
+
+// ====== UI FUNCTIONS ======
+function showLoading() {
+  if (document.getElementById('loadingOverlay')) return;
+  
+  const overlay = document.createElement('div');
+  overlay.id = 'loadingOverlay';
+  overlay.style.cssText = `
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: rgba(0,0,0,0.8);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 10000;
+    color: white;
+    font-size: 18px;
+    flex-direction: column;
+    gap: 20px;
+  `;
+  overlay.innerHTML = `
+    <div style="font-size: 24px;">🔄</div>
+    <div>Loading from Google Sheets...</div>
+  `;
+  document.body.appendChild(overlay);
+}
+
+function hideLoading() {
+  const overlay = document.getElementById('loadingOverlay');
+  if (overlay) overlay.remove();
+}
+
+function showMessage(message, type = 'info') {
+  const messageDiv = document.createElement('div');
+  messageDiv.style.cssText = `
+    position: fixed;
+    top: 20px;
+    right: 20px;
+    padding: 12px 20px;
+    border-radius: 6px;
+    color: white;
+    font-weight: 600;
+    z-index: 10001;
+    background: ${type === 'success' ? '#43a047' : type === 'error' ? '#ef5350' : '#1e88e5'};
+  `;
+  messageDiv.textContent = message;
+  document.body.appendChild(messageDiv);
+  
+  setTimeout(() => messageDiv.remove(), 3000);
+}
+
+// ====== BUTTON HANDLERS ======
+async function commitChanges() {
+  if (!isDirty) {
+    showMessage('No changes to commit');
+    return;
+  }
+  
+  const commitBtn = document.getElementById('commitBtn');
+  const originalText = commitBtn.innerHTML;
+  commitBtn.innerHTML = '💾 Saving...';
+  commitBtn.disabled = true;
+  
+  try {
+    await commitToAPI();
+    showMessage('✅ Saved to Google Sheets!', 'success');
+  } catch (error) {
+    showMessage('❌ Failed to save: ' + error.message, 'error');
+  } finally {
+    commitBtn.disabled = false;
+    updateDirtyState();
+  }
+}
+
+async function resetFromAPI() {
+  if (isDirty && !confirm('Discard uncommitted changes and reload from Google Sheets?')) {
+    return;
+  }
+  
+  showLoading();
+  try {
+    const apiAssignments = await fetchFromAPI();
+    asgn = apiAssignments;
+    updateNid();
+    updateDirtyState();
+    saveData();
+    render();
+    showMessage('✅ Reloaded from Google Sheets!', 'success');
+  } catch (error) {
+    showMessage('❌ Failed to reload: ' + error.message, 'error');
+    // Try to fall back to localStorage
+    const savedAssignments = localStorage.getItem('pp_asgn');
+    if (savedAssignments) {
+      try {
+        asgn = JSON.parse(savedAssignments);
+        render();
+        showMessage('Loaded from local cache instead', 'info');
+      } catch (e) {
+        showMessage('Both API and cache failed!', 'error');
+      }
+    }
+  } finally {
+    hideLoading();
+  }
+}
+
+function updateNid() {
+  nid = Math.max(1, ...MISSIONS.map(m => m.id)) + 1;
+}
+
+// ====== MODIFIED DATA INITIALIZATION ======
+// Initialize with empty data - will be loaded from API
+
+
+// Fallback hardcoded data for emergencies
+const FALLBACK_MISSIONS = [
   {id:1,name:"Riyadh UAM",type:"UAM",start:"2026-03-01",end:"2026-12-31",hc:1,color:"#87CEEB"},
   {id:2,name:"Bahrain Skybridge",type:"UAM",start:"2026-04-26",end:"2026-12-31",hc:1,color:"#1a3a6b"},
   {id:3,name:"Survey Argas",type:"Survey",start:"2026-02-28",end:"2026-04-15",hc:1,color:"#FF8C00"},
@@ -206,23 +533,9 @@ let MISSIONS = [
   {id:6,name:"Joby LAX",type:"Rally",start:"2026-04-01",end:"2026-12-31",hc:1,color:"#e53935"},
   {id:7,name:"Rally Gassim",type:"Rally",start:"2026-03-01",end:"2026-12-31",hc:1,color:"#c62828"},
 ];
-const DEFAULT_MISSION_COLORS={1:"#87CEEB",2:"#1a3a6b",3:"#FF8C00",4:"#E65100"};
 
-// ====== Load saved rotation edits from localStorage ======
-const savedRots = localStorage.getItem('pp_rots');
-if(savedRots){
-  try {
-    const rotMap = JSON.parse(savedRots);
-    for(const p of PILOTS){
-      if(rotMap[p.name]) p.rot = rotMap[p.name];
-    }
-  } catch(e){}
-}
-
-const savedMissions=localStorage.getItem('pp_missions');
-if(savedMissions){try{MISSIONS=JSON.parse(savedMissions);for(const m of MISSIONS){if(DEFAULT_MISSION_COLORS[m.id])m.color=DEFAULT_MISSION_COLORS[m.id];}}catch(e){}}
-let nid=Math.max(8,...MISSIONS.map(m=>m.id+1));
-let asgn=JSON.parse(localStorage.getItem('pp_asgn')||'null');
+let nid = 1;
+let asgn = {};
 
 function saveData(){
   localStorage.setItem('pp_asgn',JSON.stringify(asgn));
@@ -231,6 +544,9 @@ function saveData(){
   const rotMap={};
   for(const p of PILOTS) rotMap[p.name]=p.rot;
   localStorage.setItem('pp_rots',JSON.stringify(rotMap));
+  
+  // Update dirty state after save
+  updateDirtyState();
 }
 
 // ====== CORE DATE FUNCTIONS — ALL LOCAL TIME ======
@@ -262,36 +578,25 @@ function dO(dt){ return dB(T0,dt); }
 // Total days in range
 function tD(){ return dB(T0,T1); }
 
-// ====== Auto-populate if no saved data ======
-if(!asgn){
-  asgn={};
-  function _isOn(p,ds){for(const r of p.rot)if(ds>=r.s&&ds<=r.e&&r.st==='ON')return true;return false;}
-  function _add(mid,hi,pilot,s,e){const k=mid+'_'+hi;if(!asgn[k])asgn[k]=[];asgn[k].push({pilot,start:s,end:e});}
-  function autoFillWeekly(mid,hi,mStart,mEnd,pool){
-    const weeks=[];let c=new Date(D(mStart));const day=c.getDay();const diff=(day-5+7)%7;if(diff!==0)c.setDate(c.getDate()-diff);
-    while(F(c)<=mEnd){const we=new Date(c);we.setDate(we.getDate()+6);const ws=F(c)<mStart?mStart:F(c);const weFmt=F(we>D(mEnd)?D(mEnd):we);if(weFmt>=mStart)weeks.push({start:ws,end:weFmt});c.setDate(c.getDate()+7);}
-    let poolIdx=0,weeksOnCurrent=0,currentPilot=null;
-    for(const w of weeks){
-      if(weeksOnCurrent>=3||!currentPilot){currentPilot=null;weeksOnCurrent=0;
-        for(let tries=0;tries<pool.length;tries++){const pi=(poolIdx+tries)%pool.length;const p=PILOTS.find(pp=>pp.name===pool[pi]);
-          if(p&&_isOn(p,w.start)){let busy=false;for(const[k,arr]of Object.entries(asgn)){if(k===mid+'_'+hi)continue;for(const a of arr)if(a.pilot===pool[pi]&&a.end>=w.start&&a.start<=w.end){busy=true;break;}if(busy)break;}
-            if(!busy){currentPilot=pool[pi];poolIdx=(pi+1)%pool.length;break;}}}}
-      if(currentPilot&&_isOn(PILOTS.find(pp=>pp.name===currentPilot),w.start)){_add(mid,hi,currentPilot,w.start,w.end);weeksOnCurrent++;}else{weeksOnCurrent=3;}}
-  }
-  const surveyPool=["Dan Munteanu","Marius Hertz","Julio Bonet","Matt O'Brien","David Schicht","Kevin Allen"];
-  const uamPool=["Nathan Piper","David Leipsig","Lisa le Roux","Ivona Redlinska","Lindsay Pentz","Stephan Mayer","Rohit Kaundinya","David Schicht","Kevin Allen"];
-  autoFillWeekly(3,0,"2026-02-28","2026-04-15",surveyPool);
-  autoFillWeekly(4,0,"2026-03-21","2026-06-30",surveyPool.slice(0));
-  autoFillWeekly(4,1,"2026-03-21","2026-06-30",[...surveyPool].reverse());
-  autoFillWeekly(4,2,"2026-03-21","2026-06-30",surveyPool.slice(2));
-  autoFillWeekly(2,0,"2026-03-26","2026-12-31",uamPool);
-  autoFillWeekly(1,0,"2026-03-01","2026-12-31",uamPool);
-}
+
 
 // ====== CONSTANTS ======
 const T0=new Date(2026,1,1), T1=new Date(2027,0,31), DW=17, LW=160;
-const _fnCount={};PILOTS.forEach(p=>{const f=p.name.split(' ')[0];_fnCount[f]=(_fnCount[f]||0)+1;});
-function dispName(n){const p=n.split(' ');return _fnCount[p[0]]>1&&p.length>1?`${p[0]} ${p[p.length-1][0]}.`:p[0];}
+
+function updateFirstNameCount() {
+  const _fnCount = {};
+  PILOTS.forEach(p => {
+    const f = p.name.split(' ')[0];
+    _fnCount[f] = (_fnCount[f] || 0) + 1;
+  });
+  return _fnCount;
+}
+
+function dispName(n) {
+  const _fnCount = updateFirstNameCount();
+  const p = n.split(' ');
+  return _fnCount[p[0]] > 1 && p.length > 1 ? `${p[0]} ${p[p.length-1][0]}.` : p[0];
+}
 let sel=new Date(), pop=null;
 
 function isOn(p,ds){for(const r of p.rot)if(ds>=r.s&&ds<=r.e&&(r.st==='ON'||r.st==='WORKOVER'))return true;return false;}
@@ -1519,7 +1824,78 @@ function addM(type){type=type||'UAM';const TC={"UAM":["#87CEEB","#5BA3CF","#3A7C
 
 // ====== INIT ======
 const now=new Date();sel=(now>=T0&&now<=T1)?now:new Date(T0);
-render();setTimeout(scr,50);
+
+// Warn on page unload if there are uncommitted changes
+window.addEventListener('beforeunload', (e) => {
+  if (isDirty) {
+    e.preventDefault();
+    e.returnValue = 'You have uncommitted changes. Are you sure you want to leave?';
+  }
+});
+
+// Load data on page load
+async function initApp() {
+  showLoading();
+  try {
+    // Try to load from API first
+    const apiAssignments = await fetchFromAPI();
+    asgn = apiAssignments;
+    updateNid();
+    updateDirtyState();
+  } catch (error) {
+    console.error('Failed to load from API, trying localStorage:', error);
+    
+    // Fallback to localStorage
+    const savedAssignments = localStorage.getItem('pp_asgn');
+    const savedMissions = localStorage.getItem('pp_missions');
+    const savedRots = localStorage.getItem('pp_rots');
+    
+    if (savedAssignments && savedMissions) {
+      try {
+        asgn = JSON.parse(savedAssignments);
+        MISSIONS = JSON.parse(savedMissions);
+        
+        // Try to load pilots from localStorage or fallback to hardcoded
+        if (savedRots) {
+          // Reconstruct basic pilots from rotations
+          const rotMap = JSON.parse(savedRots);
+          PILOTS = Object.keys(rotMap).map(name => ({
+            name,
+            quals: [],
+            rot: rotMap[name],
+            ev: []
+          }));
+        }
+        
+        updateNid();
+        showMessage('Loaded from local cache (API unavailable)', 'info');
+      } catch (e) {
+        // Final fallback - use empty state
+        asgn = {};
+        MISSIONS = FALLBACK_MISSIONS;
+        PILOTS = [];
+        showMessage('Using fallback data (API and cache failed)', 'error');
+      }
+    } else {
+      // No saved data, use fallbacks
+      asgn = {};
+      MISSIONS = FALLBACK_MISSIONS;
+      PILOTS = [];
+      showMessage('No saved data found, using empty state', 'info');
+    }
+    
+    ORIGINAL_ASSIGNMENTS = {};
+    isDirty = Object.keys(asgn).length > 0;
+    updateDirtyState();
+  } finally {
+    hideLoading();
+    render();
+    setTimeout(scr, 50);
+  }
+}
+
+// Start the app
+initApp();
 </script>
 </body>
 </html>
