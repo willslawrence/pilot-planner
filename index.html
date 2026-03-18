@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Pilot Availability Planner v3.10 — THC H125</title>
+<title>Pilot Availability Planner v3.11 — THC H125</title>
 <style>
 :root {
   --bg: #0f1123;
@@ -378,6 +378,23 @@ async function commitToAPI() {
     ORIGINAL_ROTATIONS = JSON.stringify(PILOTS.map(p=>({n:p.name,rot:p.rot})));
     lastCommitTime = new Date();
     updateDirtyState();
+
+    // Notify local sync server (Planner → Obsidian reverse sync)
+    // Fire-and-forget: if Mac is offline or server isn't running, silently ignore
+    try {
+      fetch('http://127.0.0.1:9876/planner-sync', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          missions: MISSIONS.map(m => ({
+            id: m.id, name: m.name, start: m.start, end: m.end,
+            hc: m.hc, color: m.color, status: m.status
+          })),
+          timestamp: new Date().toISOString()
+        })
+      }).catch(() => {}); // silent fail
+    } catch(e) {} // double safety
+
     return result;
   } catch (error) {
     console.error('Failed to commit to API:', error);
