@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Pilot Availability Planner v3.09 — THC H125</title>
+<title>Pilot Availability Planner v3.10 — THC H125</title>
 <style>
 :root {
   --bg: #0f1123;
@@ -148,7 +148,7 @@ html.light .h-row { background:#fff; }
 <body>
 
 <div class="header">
-  <h1>🚁 Pilot Availability Planner <span id="app-version" style="font-size:12px;opacity:.6;font-weight:400">v3.09</span></h1>
+  <h1>🚁 Pilot Availability Planner <span id="app-version" style="font-size:12px;opacity:.6;font-weight:400">v3.10</span></h1>
   <div class="ctrls">
     <button class="theme-btn" onclick="toggleTheme()" id="themeBtn" title="Toggle light/dark theme">🌙</button>
     <button onclick="goToday()">Today</button>
@@ -924,7 +924,7 @@ function render(){
   html+=`</div>`;
 
   document.getElementById('mpanel').innerHTML=html;
-  document.getElementById('dp').value=ds;
+  const dpEl=document.getElementById('dp');if(dpEl)dpEl.value=ds;
   const ccu=document.getElementById('cc-uam'),ccb=document.getElementById('cc-both'),ccs=document.getElementById('cc-survey');
   if(ccu)ccu.value=PILOT_COLORS.uam;if(ccb)ccb.value=PILOT_COLORS.both;if(ccs)ccs.value=PILOT_COLORS.survey;
   const ccm=document.getElementById('cc-mg');if(ccm)ccm.value=PILOT_COLORS.mg||'#9CA3AF';
