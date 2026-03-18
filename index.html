@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Pilot Availability Planner v3.11 — THC H125</title>
+<title>Pilot Availability Planner v3.12 — THC H125</title>
 <style>
 :root {
   --bg: #0f1123;
@@ -677,7 +677,7 @@ function tD(){ return dB(T0,T1); }
 
 
 // ====== CONSTANTS ======
-const T0=new Date(2026,1,1), T1=new Date(2027,0,31), DW=17, LW=160;
+const T0=new Date(2026,1,1), T1=new Date(2027,0,31), DW=17, LW=128;
 
 function updateFirstNameCount() {
   const _fnCount = {};
@@ -1056,7 +1056,7 @@ function missionRows(m,td){
       barsHtml+=`<div class="${cls}" draggable="true" data-apilot="${a.pilot}" data-astart="${a.start}" data-aend="${a.end}" data-amid="${m.id}" data-ahi="${hi}" style="left:${al}px;width:${aw}px;top:${barTop}px;height:${barH}px;background:${p?gc(pg(p)):'#666'}" title="${a.pilot}: ${a.start}→${a.end}${off?' (OFF!)':''}">
         ${weekTicksHTML(al,aw,'rgba(255,255,255,.2)')}
         <span class="abar-grip abar-grip-l" data-edge="start" data-apilot="${a.pilot}" data-astart="${a.start}" data-aend="${a.end}" data-amid="${m.id}" data-ahi="${hi}"></span>
-        <span class="abar-date abar-date-l">${a.start.slice(5)}</span>${fn}<span class="abar-date abar-date-r">${a.end.slice(5)}</span>
+        ${aw>90?`<span class="abar-date abar-date-l">${a.start.slice(5)}</span>`:''}${fn}${aw>90?`<span class="abar-date abar-date-r">${a.end.slice(5)}</span>`:''}
         <span class="abar-grip abar-grip-r" data-edge="end" data-apilot="${a.pilot}" data-astart="${a.start}" data-aend="${a.end}" data-amid="${m.id}" data-ahi="${hi}"></span>
         <span class="ax" onclick="event.stopPropagation();remAs('${m.id}',${hi},'${safeP}','${a.start}');render()">×</span>
       </div>`;
@@ -1121,7 +1121,7 @@ function adHocRows(missions,td){
           const safeP=a.pilot.replace(/'/g,"\\'");
           barsHtml+=`<div class="abar${off?' offduty':''}" draggable="true" data-apilot="${a.pilot}" data-astart="${a.start}" data-aend="${a.end}" data-amid="${m.id}" data-ahi="${hi}" style="left:${al}px;width:${aw}px;top:${laneTop+3}px;height:${heliH-6}px;background:${p?gc(pg(p)):'#666'}" title="${a.pilot}: ${a.start}→${a.end}${off?' (OFF!)':''}">
             <span class="abar-grip abar-grip-l" data-edge="start" data-apilot="${a.pilot}" data-astart="${a.start}" data-aend="${a.end}" data-amid="${m.id}" data-ahi="${hi}"></span>
-            <span class="abar-date abar-date-l">${a.start.slice(5)}</span>${fn}<span class="abar-date abar-date-r">${a.end.slice(5)}</span>
+            ${aw>90?`<span class="abar-date abar-date-l">${a.start.slice(5)}</span>`:''}${fn}${aw>90?`<span class="abar-date abar-date-r">${a.end.slice(5)}</span>`:''}
             <span class="abar-grip abar-grip-r" data-edge="end" data-apilot="${a.pilot}" data-astart="${a.start}" data-aend="${a.end}" data-amid="${m.id}" data-ahi="${hi}"></span>
             <span class="ax" onclick="event.stopPropagation();remAs('${m.id}',${hi},'${safeP}','${a.start}');render()">×</span>
           </div>`;
@@ -1370,7 +1370,8 @@ function aeUpdateHelis(){
 function aeSave(){
   if(!pop||!pop._aeCtx) return;
   const ctx=pop._aeCtx;
-  const mid=parseInt(document.getElementById('ae-mission').value);
+  const midRaw=document.getElementById('ae-mission').value;
+  const mid=isNaN(midRaw)?midRaw:parseInt(midRaw);
   const hi=parseInt(document.getElementById('ae-heli').value);
   const start=document.getElementById('ae-start').value;
   const end=document.getElementById('ae-end').value;
