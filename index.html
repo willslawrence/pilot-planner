@@ -232,9 +232,8 @@ async function fetchFromAPI() {
       if (heliJSON) {
         try { heliDetails = JSON.parse(heliJSON); } catch(e) { console.warn('Bad heli JSON:', heliJSON); }
       }
-      // Filter to non-backup helicopters for lane count
-      const activeHelis = heliDetails.filter(h => h.role !== 'backup');
-      const heliCount = activeHelis.length > 0 ? activeHelis.length : (parseInt(mission.Helicopters) || 1);
+      // helicopter_count from YAML (via Helicopters column) is authoritative for lane count
+      const heliCount = parseInt(mission.Helicopters) || 1;
       return {
         id: mission.MissionID,
         name: mission.Name,
