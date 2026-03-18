@@ -225,18 +225,30 @@ async function fetchFromAPI() {
       pilot.rot = buildRotationsForPilot(pilot.name, ROTATIONS);
     }
     
-    MISSIONS = data.missions.filter(mission => mission.MissionID && mission.Name).map(mission => ({
-      id: mission.MissionID,
-      name: mission.Name,
-      type: mission.Type || 'UAM',
-      start: parseDateFromISO(mission.Start) || '2026-01-01',
-      end: parseDateFromISO(mission.End) || '2026-12-31',
-      hc: parseInt(mission.Helicopters) || 1,
-      color: mission.Color || getDefaultMissionColor(mission.Type || 'UAM'),
-      status: mission.Status,
-      obsidianFile: mission.ObsidianFile,
-      lastSynced: mission.LastSynced
-    }));
+    MISSIONS = data.missions.filter(mission => mission.MissionID && mission.Name).map(mission => {
+      // Parse helicopter details from new HelicopterDetails column (may come as "" key if header missing)
+      let heliDetails = [];
+      const heliJSON = mission.HelicopterDetails || mission[""] || "";
+      if (heliJSON) {
+        try { heliDetails = JSON.parse(heliJSON); } catch(e) { console.warn('Bad heli JSON:', heliJSON); }
+      }
+      // Filter to non-backup helicopters for lane count
+      const activeHelis = heliDetails.filter(h => h.role !== 'backup');
+      const heliCount = activeHelis.length > 0 ? activeHelis.length : (parseInt(mission.Helicopters) || 1);
+      return {
+        id: mission.MissionID,
+        name: mission.Name,
+        type: mission.Type || 'UAM',
+        start: parseDateFromISO(mission.Start) || '2026-01-01',
+        end: parseDateFromISO(mission.End) || '2026-12-31',
+        hc: heliCount,
+        color: mission.Color || getDefaultMissionColor(mission.Type || 'UAM'),
+        status: mission.Status,
+        obsidianFile: mission.ObsidianFile,
+        lastSynced: mission.LastSynced,
+        helicopters: heliDetails
+      };
+    });
     
     // Build assignments
     const apiAssignments = {};
@@ -886,8 +898,12 @@ function missionRows(m,td){
   // Build helicopter lane labels
   let labelHtml = `<div style="display:flex;flex-direction:column;height:100%">`;
   labelHtml += `<div style="font-weight:600;font-size:11px;color:${m.color};cursor:pointer;height:${titleH}px;display:flex;align-items:center" onclick="showPop(event,'${m.id}')">● ${m.name} <span style="font-weight:400;font-size:9px;opacity:.6;margin-left:4px">${m.hc}x</span></div>`;
+  // Get active (non-backup) helicopters for lane labels
+  const activeHelis = (m.helicopters || []).filter(h => h.role !== 'backup');
   for(let hi=0;hi<m.hc;hi++){
-    labelHtml+=`<div style="font-size:9px;color:var(--muted);height:${laneH}px;display:flex;align-items:center;padding-left:8px">🚁 ${hi+1}</div>`;
+    const heli = activeHelis[hi];
+    const heliLabel = heli ? `${heli.reg || 'TBD'}${heli.role && heli.role !== 'primary' ? ' ('+heli.role+')' : ''}` : `🚁 ${hi+1}`;
+    labelHtml+=`<div style="font-size:9px;color:var(--muted);height:${laneH}px;display:flex;align-items:center;padding-left:8px" title="${heli ? JSON.stringify(heli).replace(/"/g,'&quot;') : ''}">${heliLabel}</div>`;
   }
   labelHtml+=`</div>`;
 
