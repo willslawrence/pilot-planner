@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Pilot Availability Planner v3.02 — THC H125</title>
+<title>Pilot Availability Planner v3.03 — THC H125</title>
 <style>
 :root {
   --bg: #0f1123;
@@ -148,7 +148,7 @@ html.light .h-row { background:#fff; }
 <body>
 
 <div class="header">
-  <h1>🚁 Pilot Availability Planner <span id="app-version" style="font-size:12px;opacity:.6;font-weight:400">v3.02</span></h1>
+  <h1>🚁 Pilot Availability Planner <span id="app-version" style="font-size:12px;opacity:.6;font-weight:400">v3.03</span></h1>
   <div class="ctrls">
     <button class="theme-btn" onclick="toggleTheme()" id="themeBtn" title="Toggle light/dark theme">🌙</button>
     <button onclick="goToday()">Today</button>
@@ -187,6 +187,7 @@ let PILOTS = [];
 let MISSIONS = [];
 let ROTATIONS = [];
 let ORIGINAL_ASSIGNMENTS = {}; // Store original state for dirty checking
+let ORIGINAL_MISSIONS = []; // Store original mission state for dirty checking
 let lastCommitTime = null;
 let isDirty = false;
 
@@ -273,6 +274,7 @@ async function fetchFromAPI() {
     
     // Store original state for dirty checking
     ORIGINAL_ASSIGNMENTS = JSON.parse(JSON.stringify(apiAssignments));
+    ORIGINAL_MISSIONS = JSON.parse(JSON.stringify(MISSIONS));
     return apiAssignments;
     
   } catch (error) {
@@ -342,6 +344,7 @@ async function commitToAPI() {
 
     // Update original state and clear dirty flag
     ORIGINAL_ASSIGNMENTS = JSON.parse(JSON.stringify(asgn));
+    ORIGINAL_MISSIONS = JSON.parse(JSON.stringify(MISSIONS));
     lastCommitTime = new Date();
     updateDirtyState();
     return result;
@@ -429,9 +432,9 @@ function getDefaultMissionColor(type) {
 }
 
 function updateDirtyState() {
-  const currentState = JSON.stringify(asgn);
-  const originalState = JSON.stringify(ORIGINAL_ASSIGNMENTS);
-  isDirty = currentState !== originalState;
+  const asgnDirty = JSON.stringify(asgn) !== JSON.stringify(ORIGINAL_ASSIGNMENTS);
+  const missionDirty = JSON.stringify(MISSIONS) !== JSON.stringify(ORIGINAL_MISSIONS);
+  isDirty = asgnDirty || missionDirty;
   
   const commitBtn = document.getElementById('commitBtn');
   if (commitBtn) {
@@ -1850,26 +1853,63 @@ function savePop(id){
   m.name=document.getElementById('pn').value.trim()||m.name;
   m.type=document.getElementById('pt').value;
   m.color=document.getElementById('pc').value||m.color;
-  m.start=document.getElementById('ps').value||m.start;
-  m.end=document.getElementById('pe').value||m.end;
+  
+  // Cascading date logic — shift heli dates when mission dates change
+  const oldStart=m.start, oldEnd=m.end;
+  const newStart=document.getElementById('ps').value||m.start;
+  const newEnd=document.getElementById('pe').value||m.end;
+  const startShiftDays = oldStart!==newStart ? daysBetween(oldStart, newStart) : 0;
+  const endShiftDays = oldEnd!==newEnd ? daysBetween(oldEnd, newEnd) : 0;
+  
+  m.start=newStart;
+  m.end=newEnd;
   m.hc=Math.max(1,parseInt(document.getElementById('ph').value)||1);
+  
   // Read helicopter lane details from popup
   const regs=document.querySelectorAll('.heli-reg');
   const starts=document.querySelectorAll('.heli-start');
   const ends=document.querySelectorAll('.heli-end');
   if(regs.length>0){
-    // Preserve backup entries
     const backups=(m.helicopters||[]).filter(h=>h.role==='backup');
     const active=[];
     regs.forEach((el,i)=>{
+      const oldHeli = ((m.helicopters||[]).filter(h=>h.role!=='backup'))[i] || {};
       const reg=el.value.trim()||'TBD';
-      const s=starts[i]?starts[i].value:'';
-      const e2=ends[i]?ends[i].value:'';
-      active.push({reg, role: i===0?'primary':(active.length<m.hc?'primary':'additional'), start:s||m.start, end:e2||m.end});
+      let s=starts[i]?starts[i].value:'';
+      let e2=ends[i]?ends[i].value:'';
+      
+      // If user didn't manually change the heli dates in the popup, cascade mission date shifts
+      if(startShiftDays!==0 && s===oldHeli.start){
+        s = shiftDate(s, startShiftDays);
+      }
+      if(endShiftDays!==0 && e2===oldHeli.end){
+        e2 = shiftDate(e2, endShiftDays);
+      }
+      
+      active.push({reg, role: oldHeli.role || (i===0?'primary':'primary'), start:s||m.start, end:e2||m.end});
     });
     m.helicopters=[...active,...backups];
+  } else if(startShiftDays!==0 || endShiftDays!==0){
+    // No popup fields but dates changed — shift existing heli dates
+    (m.helicopters||[]).forEach(h=>{
+      if(h.role==='backup') return;
+      if(startShiftDays!==0 && h.start===oldStart) h.start=shiftDate(h.start, startShiftDays);
+      if(endShiftDays!==0 && h.end===oldEnd) h.end=shiftDate(h.end, endShiftDays);
+    });
   }
-  cPop();render();
+  
+  cPop();updateDirtyState();render();
+}
+
+function daysBetween(dateA, dateB){
+  const a=new Date(dateA), b=new Date(dateB);
+  return Math.round((b-a)/(86400000));
+}
+function shiftDate(dateStr, days){
+  if(!dateStr) return dateStr;
+  const d=new Date(dateStr);
+  d.setDate(d.getDate()+days);
+  return F(d);
 }
 function delM(id){MISSIONS=MISSIONS.filter(m=>m.id!==id);for(const k of Object.keys(asgn))if(k.startsWith(id+'_'))delete asgn[k];cPop();render();}
 function showAddPilotPop(e){
