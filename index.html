@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Pilot Availability Planner v3.05 — THC H125</title>
+<title>Pilot Availability Planner v3.06 — THC H125</title>
 <style>
 :root {
   --bg: #0f1123;
@@ -148,7 +148,7 @@ html.light .h-row { background:#fff; }
 <body>
 
 <div class="header">
-  <h1>🚁 Pilot Availability Planner <span id="app-version" style="font-size:12px;opacity:.6;font-weight:400">v3.05</span></h1>
+  <h1>🚁 Pilot Availability Planner <span id="app-version" style="font-size:12px;opacity:.6;font-weight:400">v3.06</span></h1>
   <div class="ctrls">
     <button class="theme-btn" onclick="toggleTheme()" id="themeBtn" title="Toggle light/dark theme">🌙</button>
     <button onclick="goToday()">Today</button>
@@ -236,6 +236,10 @@ async function fetchFromAPI() {
       }
       // helicopter_count from YAML (via Helicopters column) is authoritative for lane count
       const heliCount = parseInt(mission.Helicopters) || 1;
+      // Trim active helis to match count (clean stale data)
+      const backups = heliDetails.filter(h => h.role === 'backup');
+      const active = heliDetails.filter(h => h.role !== 'backup').slice(0, heliCount);
+      heliDetails = [...active, ...backups];
       return {
         id: mission.MissionID,
         name: mission.Name,
@@ -1829,7 +1833,7 @@ function showPop(e,id){
   const helis = m.helicopters || [];
   const activeHelis = helis.filter(h=>h.role!=='backup');
   let heliHtml = '<div style="margin-top:6px"><div style="font-size:10px;font-weight:600;color:var(--muted);margin-bottom:4px">Aircraft Lanes</div>';
-  for(let i=0;i<Math.max(m.hc, activeHelis.length);i++){
+  for(let i=0;i<m.hc;i++){
     const h = activeHelis[i] || {};
     heliHtml += `<div style="display:grid;grid-template-columns:80px 1fr 1fr;gap:4px;margin-bottom:3px;align-items:center">
       <input class="heli-reg" data-hi="${i}" value="${h.reg||'TBD'}" placeholder="Reg" style="font-size:10px;padding:2px 4px;background:var(--surface2);border:1px solid var(--border);color:var(--text);border-radius:3px">
