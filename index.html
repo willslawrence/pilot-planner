@@ -900,8 +900,11 @@ function missionRows(m,td){
   // Get active (non-backup) helicopters for lane labels
   const activeHelis = (m.helicopters || []).filter(h => h.role !== 'backup');
   for(let hi=0;hi<m.hc;hi++){
-    const heli = activeHelis[hi];
-    const heliLabel = heli ? `${heli.reg || 'TBD'}${heli.role && heli.role !== 'primary' ? ' ('+heli.role+')' : ''}` : `🚁 ${hi+1}`;
+    let heli = activeHelis[hi];
+    // If fewer active helis than lanes, reuse the primary for extra lanes (multi-pilot same heli)
+    if (!heli && activeHelis.length > 0) heli = activeHelis[0];
+    const roleTag = heli && heli.role && heli.role !== 'primary' ? ` (${heli.role})` : '';
+    const heliLabel = heli ? `${heli.reg || 'TBD'}${roleTag}` : `🚁 ${hi+1}`;
     labelHtml+=`<div style="font-size:9px;color:var(--muted);height:${laneH}px;display:flex;align-items:center;padding-left:8px" title="${heli ? JSON.stringify(heli).replace(/"/g,'&quot;') : ''}">${heliLabel}</div>`;
   }
   labelHtml+=`</div>`;
