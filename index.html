@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Pilot Availability Planner v3.08 — THC H125</title>
+<title>Pilot Availability Planner v3.09 — THC H125</title>
 <style>
 :root {
   --bg: #0f1123;
@@ -148,7 +148,7 @@ html.light .h-row { background:#fff; }
 <body>
 
 <div class="header">
-  <h1>🚁 Pilot Availability Planner <span id="app-version" style="font-size:12px;opacity:.6;font-weight:400">v3.08</span></h1>
+  <h1>🚁 Pilot Availability Planner <span id="app-version" style="font-size:12px;opacity:.6;font-weight:400">v3.09</span></h1>
   <div class="ctrls">
     <button class="theme-btn" onclick="toggleTheme()" id="themeBtn" title="Toggle light/dark theme">🌙</button>
     <button onclick="goToday()">Today</button>
@@ -304,19 +304,23 @@ async function commitToAPI() {
       }
     }
     
-    const response = await fetch(`${BASE_URL}?action=write&sheet=Assignments`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'text/plain',
-      },
-      body: JSON.stringify({ rows, clearAll: rows.length === 0 }),
-      redirect: 'follow'
-    });
-    
-    if (!response.ok) throw new Error(`HTTP ${response.status}`);
-    const result = await response.json();
-    
-    if (!result.success) throw new Error('Assignments write failed');
+    // Skip assignments write if no assignments (API rejects empty rows)
+    let result = { success: true, rowsWritten: 0 };
+    if (rows.length > 0) {
+      const response = await fetch(`${BASE_URL}?action=write&sheet=Assignments`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'text/plain',
+        },
+        body: JSON.stringify({ rows }),
+        redirect: 'follow'
+      });
+      
+      if (!response.ok) throw new Error(`HTTP ${response.status}`);
+      result = await response.json();
+      
+      if (!result.success) throw new Error('Assignments write failed');
+    }
 
     // Also commit mission changes (color, name, type, dates, heli count)
     const missionRows = MISSIONS.map(m => [
@@ -1799,13 +1803,13 @@ function setupDrops(){
       if(onPilots.length){
         html+='<div style="font-size:9px;color:var(--accent);margin:4px 0 2px;font-weight:600">ON ROTATION</div>';
         for(const p of onPilots){
-          html+=`<div style="padding:6px 8px;cursor:pointer;border-radius:4px;font-size:11px;font-weight:600" onmouseover="this.style.background='var(--surface2)'" onmouseout="this.style.background=''" onclick="addAs(${mid},${hi},'${p.name.replace(/'/g,"\\'")}','${startDate}','${endDate}');cPop();render()">${p.name}</div>`;
+          html+=`<div style="padding:6px 8px;cursor:pointer;border-radius:4px;font-size:11px;font-weight:600" onmouseover="this.style.background='var(--surface2)'" onmouseout="this.style.background=''" onclick="addAs('${mid}',${hi},'${p.name.replace(/'/g,"\\'")}','${startDate}','${endDate}');cPop();render()">${p.name}</div>`;
         }
       }
       if(offPilots.length){
         html+='<div style="font-size:9px;color:var(--muted);margin:4px 0 2px;font-weight:600">OFF ROTATION</div>';
         for(const p of offPilots){
-          html+=`<div style="padding:6px 8px;cursor:pointer;border-radius:4px;font-size:11px;font-weight:600;opacity:.5" onmouseover="this.style.background='var(--surface2)'" onmouseout="this.style.background=''" onclick="addAs(${mid},${hi},'${p.name.replace(/'/g,"\\'")}','${startDate}','${endDate}');cPop();render()">${p.name}</div>`;
+          html+=`<div style="padding:6px 8px;cursor:pointer;border-radius:4px;font-size:11px;font-weight:600;opacity:.5" onmouseover="this.style.background='var(--surface2)'" onmouseout="this.style.background=''" onclick="addAs('${mid}',${hi},'${p.name.replace(/'/g,"\\'")}','${startDate}','${endDate}');cPop();render()">${p.name}</div>`;
         }
       }
       html+='<div class="pb"><button class="pcancel" onclick="cPop()">Cancel</button></div>';
