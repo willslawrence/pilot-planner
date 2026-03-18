@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Pilot Availability Planner v3.04 — THC H125</title>
+<title>Pilot Availability Planner v3.05 — THC H125</title>
 <style>
 :root {
   --bg: #0f1123;
@@ -148,7 +148,7 @@ html.light .h-row { background:#fff; }
 <body>
 
 <div class="header">
-  <h1>🚁 Pilot Availability Planner <span id="app-version" style="font-size:12px;opacity:.6;font-weight:400">v3.04</span></h1>
+  <h1>🚁 Pilot Availability Planner <span id="app-version" style="font-size:12px;opacity:.6;font-weight:400">v3.05</span></h1>
   <div class="ctrls">
     <button class="theme-btn" onclick="toggleTheme()" id="themeBtn" title="Toggle light/dark theme">🌙</button>
     <button onclick="goToday()">Today</button>
@@ -188,6 +188,7 @@ let MISSIONS = [];
 let ROTATIONS = [];
 let ORIGINAL_ASSIGNMENTS = {}; // Store original state for dirty checking
 let ORIGINAL_MISSIONS = []; // Store original mission state for dirty checking
+let ORIGINAL_ROTATIONS = ''; // Store original rotation state for dirty checking
 let lastCommitTime = null;
 let isDirty = false;
 
@@ -275,6 +276,7 @@ async function fetchFromAPI() {
     // Store original state for dirty checking
     ORIGINAL_ASSIGNMENTS = JSON.parse(JSON.stringify(apiAssignments));
     ORIGINAL_MISSIONS = JSON.parse(JSON.stringify(MISSIONS));
+    ORIGINAL_ROTATIONS = JSON.stringify(PILOTS.map(p=>({n:p.name,rot:p.rot})));
     return apiAssignments;
     
   } catch (error) {
@@ -342,9 +344,35 @@ async function commitToAPI() {
       if (!mResult.success) console.warn('Mission write failed:', mResult);
     }
 
+    // Commit rotation changes
+    const rotRows = [];
+    for (const p of PILOTS) {
+      for (const r of (p.rot || [])) {
+        rotRows.push([
+          p.name,
+          r.st || 'OFF',
+          `${r.s}T00:00:00.000Z`,
+          `${r.e}T00:00:00.000Z`,
+          p.fleetplanId || '',
+          timestamp
+        ]);
+      }
+    }
+    const rResp = await fetch(`${BASE_URL}?action=write&sheet=Rotations`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'text/plain' },
+      body: JSON.stringify({ rows: rotRows }),
+      redirect: 'follow'
+    });
+    if (rResp.ok) {
+      const rResult = await rResp.json();
+      if (!rResult.success) console.warn('Rotation write failed:', rResult);
+    }
+
     // Update original state and clear dirty flag
     ORIGINAL_ASSIGNMENTS = JSON.parse(JSON.stringify(asgn));
     ORIGINAL_MISSIONS = JSON.parse(JSON.stringify(MISSIONS));
+    ORIGINAL_ROTATIONS = JSON.stringify(PILOTS.map(p=>({n:p.name,rot:p.rot})));
     lastCommitTime = new Date();
     updateDirtyState();
     return result;
@@ -434,7 +462,8 @@ function getDefaultMissionColor(type) {
 function updateDirtyState() {
   const asgnDirty = JSON.stringify(asgn) !== JSON.stringify(ORIGINAL_ASSIGNMENTS);
   const missionDirty = JSON.stringify(MISSIONS) !== JSON.stringify(ORIGINAL_MISSIONS);
-  isDirty = asgnDirty || missionDirty;
+  const rotDirty = JSON.stringify(PILOTS.map(p=>({n:p.name,rot:p.rot}))) !== ORIGINAL_ROTATIONS;
+  isDirty = asgnDirty || missionDirty || rotDirty;
   
   const commitBtn = document.getElementById('commitBtn');
   if (commitBtn) {
@@ -1241,7 +1270,6 @@ function saveRotPop(){
   if(!newStart||!newEnd){alert('Set both dates');return;}
   if(newEnd<newStart){alert('End must be after start');return;}
   if(isNew){
-    // Insert new rotation in sorted order
     pilot.rot.push({s:newStart, e:newEnd, st:newStatus});
     pilot.rot.sort((a,b)=>a.s.localeCompare(b.s));
   } else {
@@ -1249,8 +1277,7 @@ function saveRotPop(){
     pilot.rot[ri].e = newEnd;
     pilot.rot[ri].st = newStatus;
   }
-  cPop();
-  render();
+  cPop();updateDirtyState();render();
 }
 
 function deleteRot(){
@@ -1258,8 +1285,7 @@ function deleteRot(){
   const {pilot, ri} = pop._rotCtx;
   if(!confirm('Delete this rotation block?')) return;
   pilot.rot.splice(ri, 1);
-  cPop();
-  render();
+  cPop();updateDirtyState();render();
 }
 
 // ====== ASSIGNMENT EDITOR POPOVER ======
