@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Pilot Availability Planner v3.12 — THC H125</title>
+<title>Pilot Availability Planner v3.13 — THC H125</title>
 <style>
 :root {
   --bg: #0f1123;
@@ -148,7 +148,7 @@ html.light .h-row { background:#fff; }
 <body>
 
 <div class="header">
-  <h1>🚁 Pilot Availability Planner <span id="app-version" style="font-size:12px;opacity:.6;font-weight:400">v3.11</span></h1>
+  <h1>🚁 Pilot Availability Planner <span id="app-version" style="font-size:12px;opacity:.6;font-weight:400">v3.13</span></h1>
   <div class="ctrls">
     <button class="theme-btn" onclick="toggleTheme()" id="themeBtn" title="Toggle light/dark theme">🌙</button>
     <button onclick="goToday()">Today</button>
@@ -988,10 +988,11 @@ function missionRows(m,td){
   // Build the combined bar area with mission bar spanning full height and lanes inside
   let barsHtml='';
   // Mission background bar spanning all lanes
+  // Mission title outside bar, just before the start
+  if(ml>0) barsHtml+=`<div style="position:absolute;right:${td*DW-ml+4}px;top:0;height:${titleH}px;display:flex;align-items:center;font-size:9px;font-weight:600;color:${m.color};white-space:nowrap;pointer-events:none;z-index:3">${m.name}</div>`;
   barsHtml+=`<div class="mbar" data-mid="${m.id}" style="left:${ml}px;width:${mw}px;height:${titleH}px;top:0;bottom:auto;background:${m.color};border:1px solid ${m.color};border-radius:4px 4px 0 0;cursor:grab;z-index:2">
     ${weekTicksHTML(ml,mw,'rgba(255,255,255,.2)')}
     <span class="mbar-date mbar-start" style="color:rgba(255,255,255,.9)">${m.start.slice(5)}</span>
-    <span class="mbar-name" style="color:#fff">${m.name}</span>
     <span class="mbar-date mbar-end" style="color:rgba(255,255,255,.9)">${m.end.slice(5)}</span>
   </div>`;
   // Helicopter lane backgrounds — per-heli start/end if available, otherwise mission-wide
