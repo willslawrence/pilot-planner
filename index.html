@@ -313,15 +313,38 @@ async function commitToAPI() {
     if (!response.ok) throw new Error(`HTTP ${response.status}`);
     const result = await response.json();
     
-    if (result.success) {
-      // Update original state and clear dirty flag
-      ORIGINAL_ASSIGNMENTS = JSON.parse(JSON.stringify(asgn));
-      lastCommitTime = new Date();
-      updateDirtyState();
-      return result;
-    } else {
-      throw new Error('API returned failure');
+    if (!result.success) throw new Error('Assignments write failed');
+
+    // Also commit mission changes (color, name, type, dates, heli count)
+    const missionRows = MISSIONS.map(m => [
+      m.id,
+      m.name,
+      m.type,
+      `${m.start}T00:00:00.000Z`,
+      `${m.end}T00:00:00.000Z`,
+      m.hc,
+      m.color,
+      m.status || '',
+      m.obsidianFile || '',
+      timestamp,
+      m.helicopters ? JSON.stringify(m.helicopters) : ''
+    ]);
+    const mResp = await fetch(`${BASE_URL}?action=write&sheet=Missions`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'text/plain' },
+      body: JSON.stringify({ rows: missionRows }),
+      redirect: 'follow'
+    });
+    if (mResp.ok) {
+      const mResult = await mResp.json();
+      if (!mResult.success) console.warn('Mission write failed:', mResult);
     }
+
+    // Update original state and clear dirty flag
+    ORIGINAL_ASSIGNMENTS = JSON.parse(JSON.stringify(asgn));
+    lastCommitTime = new Date();
+    updateDirtyState();
+    return result;
   } catch (error) {
     console.error('Failed to commit to API:', error);
     throw error;
@@ -852,10 +875,7 @@ function render(){
   html+=adHocRows(rally,td);
   html+=`<div class="row" style="min-height:22px"><div class="rlabel"><span class="add-btn" onclick="addM('Rally')">+ Add Ad Hoc Mission</span></div><div class="rbars" style="width:${td*DW}px"></div></div>`;
 
-  // Cursor
-  html+=`<div class="cur" style="left:${cx}px"></div>`;
-  html+=`<div class="cur-lbl" style="left:${cx}px">${ds}</div>`;
-  html+=`<div class="cur-drag" style="left:${cx}px"></div>`;
+  // Fixed cursor line removed — hover cursor is sufficient
   // Hover cursor line
   html+=`<div id="hover-cur" style="position:absolute;top:0;bottom:0;width:1px;background:rgba(255,214,0,.4);z-index:14;pointer-events:none;display:none"></div>`;
   html+=`<div id="hover-lbl" style="position:absolute;z-index:16;font-size:8px;background:rgba(255,214,0,.6);color:#000;padding:1px 4px;border-radius:2px;pointer-events:none;white-space:nowrap;font-weight:600;bottom:2px;display:none"></div>`;
@@ -918,8 +938,19 @@ function missionRows(m,td){
     <span class="mbar-name" style="color:#fff">${m.name}</span>
     <span class="mbar-date mbar-end" style="color:rgba(255,255,255,.9)">${m.end.slice(5)}</span>
   </div>`;
-  // Helicopter lane background — solid, same as title bar
-  barsHtml+=`<div style="position:absolute;left:${ml}px;width:${mw}px;top:${titleH}px;height:${totalH-titleH}px;background:${m.color};border-left:1px solid ${m.color};border-right:1px solid ${m.color};border-bottom:1px solid ${m.color};border-radius:0 0 4px 4px;pointer-events:none;z-index:0">${weekTicksHTML(ml,mw,'rgba(255,255,255,.15)')}</div>`;
+  // Helicopter lane backgrounds — per-heli start/end if available, otherwise mission-wide
+  const activeHelisForBars = (m.helicopters || []).filter(h => h.role !== 'backup');
+  for(let hi=0;hi<m.hc;hi++){
+    const heli = activeHelisForBars[hi] || activeHelisForBars[0];
+    const heliStart = (heli && heli.start) ? heli.start : m.start;
+    const heliEnd = (heli && heli.end) ? heli.end : m.end;
+    const hl = Math.max(0, dO(D(heliStart))) * DW;
+    const hw = Math.max(20, (Math.min(td, dO(D(heliEnd))+1) - Math.max(0, dO(D(heliStart)))) * DW);
+    const laneTop = titleH + hi * laneH;
+    const isLast = hi === m.hc - 1;
+    const borderRadius = isLast ? '0 0 4px 4px' : '0';
+    barsHtml+=`<div class="heli-lane-bg" data-mid="${m.id}" data-hi="${hi}" style="position:absolute;left:${hl}px;width:${hw}px;top:${laneTop}px;height:${laneH}px;background:${m.color};border-left:1px solid ${m.color};border-right:1px solid ${m.color};${isLast?'border-bottom:1px solid '+m.color+';':''}border-radius:${borderRadius};pointer-events:none;z-index:0">${weekTicksHTML(hl,hw,'rgba(255,255,255,.15)')}</div>`;
+  }
 
   // Helicopter lanes
   for(let hi=0;hi<m.hc;hi++){
@@ -1764,7 +1795,27 @@ function showPop(e,id){
   e.stopPropagation();if(pop) pop.remove();
   const m=MISSIONS.find(mm=>mm.id===id);if(!m) return;
   const div=document.createElement('div');div.className='pop';
-  div.innerHTML=`<label>Name</label><input id="pn" value="${m.name}"><label>Type</label><select id="pt"><option value="UAM"${m.type==='UAM'?' selected':''}>UAM</option><option value="Survey"${m.type==='Survey'?' selected':''}>Survey</option><option value="Training"${m.type==='Training'?' selected':''}>Training</option><option value="Rally"${m.type==='Rally'?' selected':''}>Ad Hoc (Rally)</option><option value="Ad Hoc"${m.type==='Ad Hoc'?' selected':''}>Ad Hoc</option></select><label>Color</label><input type="color" id="pc" value="${m.color}" style="height:32px;padding:2px;cursor:pointer"><label>Start</label><input type="date" id="ps" value="${m.start}"><label>End</label><input type="date" id="pe" value="${m.end}"><label>Helicopters</label><input type="number" id="ph" value="${m.hc}" min="1" max="10"><div class="pb"><button class="pdel" onclick="delM('${m.id}')">Delete</button><button class="pcancel" onclick="cPop()">Cancel</button><button class="psave" onclick="savePop('${m.id}')">Save</button></div>`;
+  div.style.width='320px';
+  // Build helicopter details editor
+  const helis = m.helicopters || [];
+  const activeHelis = helis.filter(h=>h.role!=='backup');
+  let heliHtml = '<div style="margin-top:6px"><div style="font-size:10px;font-weight:600;color:var(--muted);margin-bottom:4px">Aircraft Lanes</div>';
+  for(let i=0;i<Math.max(m.hc, activeHelis.length);i++){
+    const h = activeHelis[i] || {};
+    heliHtml += `<div style="display:grid;grid-template-columns:80px 1fr 1fr;gap:4px;margin-bottom:3px;align-items:center">
+      <input class="heli-reg" data-hi="${i}" value="${h.reg||'TBD'}" placeholder="Reg" style="font-size:10px;padding:2px 4px;background:var(--surface2);border:1px solid var(--border);color:var(--text);border-radius:3px">
+      <input type="date" class="heli-start" data-hi="${i}" value="${h.start||m.start}" style="font-size:10px;padding:2px;background:var(--surface2);border:1px solid var(--border);color:var(--text);border-radius:3px">
+      <input type="date" class="heli-end" data-hi="${i}" value="${h.end||m.end}" style="font-size:10px;padding:2px;background:var(--surface2);border:1px solid var(--border);color:var(--text);border-radius:3px">
+    </div>`;
+  }
+  // Show backups as read-only
+  const backups = helis.filter(h=>h.role==='backup');
+  if(backups.length){
+    heliHtml += '<div style="font-size:9px;color:var(--muted);margin-top:4px">Backups: '+backups.map(b=>b.reg).join(', ')+'</div>';
+  }
+  heliHtml += '</div>';
+
+  div.innerHTML=`<label>Name</label><input id="pn" value="${m.name}"><label>Type</label><select id="pt"><option value="UAM"${m.type==='UAM'?' selected':''}>UAM</option><option value="Survey"${m.type==='Survey'?' selected':''}>Survey</option><option value="Training"${m.type==='Training'?' selected':''}>Training</option><option value="Rally"${m.type==='Rally'?' selected':''}>Ad Hoc (Rally)</option><option value="Ad Hoc"${m.type==='Ad Hoc'?' selected':''}>Ad Hoc</option></select><label>Color</label><input type="color" id="pc" value="${m.color}" style="height:32px;padding:2px;cursor:pointer"><label>Start</label><input type="date" id="ps" value="${m.start}"><label>End</label><input type="date" id="pe" value="${m.end}"><label>Helicopter Lanes</label><input type="number" id="ph" value="${m.hc}" min="1" max="10">${heliHtml}<div class="pb"><button class="pdel" onclick="delM('${m.id}')">Delete</button><button class="pcancel" onclick="cPop()">Cancel</button><button class="psave" onclick="savePop('${m.id}')">Save</button></div>`;
   document.body.appendChild(div);pop=div;
   const popRect=div.getBoundingClientRect();
   div.style.top=Math.max(8,Math.min(e.clientY+5,innerHeight-popRect.height-8))+'px';
@@ -1794,7 +1845,32 @@ function popPos(div,e,avoidEl){
 }
 function cPop2(e){if(pop&&!pop.contains(e.target)){cPop();document.removeEventListener('click',cPop2);}}
 function cPop(){if(pop){pop.remove();pop=null;}}
-function savePop(id){const m=MISSIONS.find(mm=>mm.id===id);if(!m) return;m.name=document.getElementById('pn').value.trim()||m.name;m.type=document.getElementById('pt').value;m.color=document.getElementById('pc').value||m.color;m.start=document.getElementById('ps').value||m.start;m.end=document.getElementById('pe').value||m.end;m.hc=Math.max(1,parseInt(document.getElementById('ph').value)||1);cPop();render();}
+function savePop(id){
+  const m=MISSIONS.find(mm=>mm.id===id);if(!m) return;
+  m.name=document.getElementById('pn').value.trim()||m.name;
+  m.type=document.getElementById('pt').value;
+  m.color=document.getElementById('pc').value||m.color;
+  m.start=document.getElementById('ps').value||m.start;
+  m.end=document.getElementById('pe').value||m.end;
+  m.hc=Math.max(1,parseInt(document.getElementById('ph').value)||1);
+  // Read helicopter lane details from popup
+  const regs=document.querySelectorAll('.heli-reg');
+  const starts=document.querySelectorAll('.heli-start');
+  const ends=document.querySelectorAll('.heli-end');
+  if(regs.length>0){
+    // Preserve backup entries
+    const backups=(m.helicopters||[]).filter(h=>h.role==='backup');
+    const active=[];
+    regs.forEach((el,i)=>{
+      const reg=el.value.trim()||'TBD';
+      const s=starts[i]?starts[i].value:'';
+      const e2=ends[i]?ends[i].value:'';
+      active.push({reg, role: i===0?'primary':(active.length<m.hc?'primary':'additional'), start:s||m.start, end:e2||m.end});
+    });
+    m.helicopters=[...active,...backups];
+  }
+  cPop();render();
+}
 function delM(id){MISSIONS=MISSIONS.filter(m=>m.id!==id);for(const k of Object.keys(asgn))if(k.startsWith(id+'_'))delete asgn[k];cPop();render();}
 function showAddPilotPop(e){
   e.stopPropagation();if(pop) pop.remove();
