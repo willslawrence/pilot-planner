@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Pilot Availability Planner v3.07 — THC H125</title>
+<title>Pilot Availability Planner v3.08 — THC H125</title>
 <style>
 :root {
   --bg: #0f1123;
@@ -148,15 +148,10 @@ html.light .h-row { background:#fff; }
 <body>
 
 <div class="header">
-  <h1>🚁 Pilot Availability Planner <span id="app-version" style="font-size:12px;opacity:.6;font-weight:400">v3.07</span></h1>
+  <h1>🚁 Pilot Availability Planner <span id="app-version" style="font-size:12px;opacity:.6;font-weight:400">v3.08</span></h1>
   <div class="ctrls">
     <button class="theme-btn" onclick="toggleTheme()" id="themeBtn" title="Toggle light/dark theme">🌙</button>
     <button onclick="goToday()">Today</button>
-    <button onclick="shf(-7)">◀ Wk</button>
-    <input type="date" id="dp" onchange="setD(this.value)">
-    <button onclick="shf(7)">Wk ▶</button>
-    <button onclick="shf(-30)">◀ Mo</button>
-    <button onclick="shf(30)">Mo ▶</button>
     <button id="commitBtn" onclick="commitChanges()" title="Save changes to Google Sheets" style="position:relative;">💾 Commit</button>
     <button onclick="resetFromAPI()" title="Reload from Google Sheets and discard uncommitted changes">🗑️ Reset</button>
   </div>
@@ -314,7 +309,7 @@ async function commitToAPI() {
       headers: {
         'Content-Type': 'text/plain',
       },
-      body: JSON.stringify({ rows }),
+      body: JSON.stringify({ rows, clearAll: rows.length === 0 }),
       redirect: 'follow'
     });
     
