@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Pilot Availability Planner v3.13 — THC H125</title>
+<title>Pilot Availability Planner v3.14 — THC H125</title>
 <style>
 :root {
   --bg: #0f1123;
@@ -108,8 +108,8 @@ html.light .h-row { background:#fff; }
 .rot-date { position:absolute; bottom:1px; font-size:10px; font-weight:700; color:#fff; opacity:.9; pointer-events:none; white-space:nowrap; text-shadow:0 1px 2px rgba(0,0,0,.5); }
 .rot-start { left:3px; }
 .rot-end { right:3px; }
-.rot-center { position:absolute; left:50%; top:50%; transform:translate(-50%,-50%); font-size:9px; font-weight:700; }
-.rot-center.warn { color:#ff4444; text-shadow:0 0 4px rgba(255,0,0,.5); }
+.rot-center { position:absolute; left:50%; top:50%; transform:translate(-50%,-50%); font-size:11px; font-weight:700; color:#fff; text-shadow:0 1px 2px rgba(0,0,0,.5); }
+.rot-center.warn { color:#ff4444; font-size:10px; text-shadow:0 0 4px rgba(255,0,0,.5); }
 .duty-blk.on { opacity:.55; }
 .duty-blk.off { background:#F87171; opacity:.22; }
 .duty-blk.workover { opacity:.55; background-image:repeating-linear-gradient(45deg,transparent,transparent 4px,rgba(66,165,245,.4) 4px,rgba(66,165,245,.4) 8px); }
@@ -148,7 +148,7 @@ html.light .h-row { background:#fff; }
 <body>
 
 <div class="header">
-  <h1>🚁 Pilot Availability Planner <span id="app-version" style="font-size:12px;opacity:.6;font-weight:400">v3.13</span></h1>
+  <h1>🚁 Pilot Availability Planner <span id="app-version" style="font-size:12px;opacity:.6;font-weight:400">v3.14</span></h1>
   <div class="ctrls">
     <button class="theme-btn" onclick="toggleTheme()" id="themeBtn" title="Toggle light/dark theme">🌙</button>
     <button onclick="goToday()">Today</button>
@@ -1099,11 +1099,12 @@ function adHocRows(missions,td){
     for(const m of lane){
       const ml=Math.max(0,dO(D(m.start)))*DW, mw=Math.max(20,(Math.min(td,dO(D(m.end))+1)-Math.max(0,dO(D(m.start))))*DW);
       const mTotalH=titleH+heliH*m.hc;
-      // Title bar — same style as regular missions
+      // Mission title outside bar, just before the start (same as regular missions)
+      if(ml>0) barsHtml+=`<div style="position:absolute;right:${td*DW-ml+4}px;top:0;height:${titleH}px;display:flex;align-items:center;font-size:9px;font-weight:600;color:${m.color};white-space:nowrap;pointer-events:none;z-index:3">${m.name}${m.hc>1?' '+m.hc+'x':''}</div>`;
+      // Title bar
       barsHtml+=`<div class="mbar" data-mid="${m.id}" style="left:${ml}px;width:${mw}px;height:${titleH}px;top:0;bottom:auto;background:${m.color};border:1px solid ${m.color};border-radius:4px 4px 0 0;cursor:pointer;z-index:2" onclick="showPop(event,'${m.id}')">
         ${weekTicksHTML(ml,mw,'rgba(255,255,255,.2)')}
         <span class="mbar-date mbar-start" style="color:rgba(255,255,255,.9)">${m.start.slice(5)}</span>
-        <span class="mbar-name" style="color:#fff">${m.name}${m.hc>1?' '+m.hc+'x':''}</span>
         <span class="mbar-date mbar-end" style="color:rgba(255,255,255,.9)">${m.end.slice(5)}</span>
       </div>`;
       // Heli lane backgrounds
@@ -1148,9 +1149,10 @@ function pilotRow(p,td,ds){
       const eLabel=r.e.slice(5);
       // Calculate week count
       const days = dB(D(r.s),D(r.e))+1;
-      const weeks = Math.round(days/7);
-      const weekLabel = weeks+'w';
+      const fullWeeks = Math.floor(days/7);
+      const remDays = days % 7;
       const isStandard = days===42; // exactly 6 weeks
+      const weekLabel = isStandard ? '6W' : (remDays===0 ? fullWeeks+'W' : fullWeeks+'W+'+remDays+'D');
       const centerCls = isStandard ? 'rot-center' : 'rot-center warn';
       const blkCls = r.st==='WORKOVER' ? 'duty-blk workover' : 'duty-blk on';
       bars+=`<div class="${blkCls}" data-pilot="${p.name}" data-ri="${ri}" style="left:${rl}px;width:${rw}px;background:${r.st==='WORKOVER'?'#42A5F5':'#10B981'}">
