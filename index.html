@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Pilot Availability Planner v3.16 — THC H125</title>
+<title>Pilot Availability Planner v3.17 — THC H125</title>
 <style>
 :root {
   --bg: #0f1123;
@@ -148,7 +148,7 @@ html.light .h-row { background:#fff; }
 <body>
 
 <div class="header">
-  <h1>🚁 Pilot Availability Planner <span id="app-version" style="font-size:12px;opacity:.6;font-weight:400">v3.16</span></h1>
+  <h1>🚁 Pilot Availability Planner <span id="app-version" style="font-size:12px;opacity:.6;font-weight:400">v3.17</span></h1>
   <div class="ctrls">
     <button class="theme-btn" onclick="toggleTheme()" id="themeBtn" title="Toggle light/dark theme">🌙</button>
     <button onclick="goToday()">Today</button>
@@ -936,6 +936,14 @@ function render(){
   html+=`<div id="hover-cur" style="position:absolute;top:0;bottom:0;width:3px;background:rgba(255,214,0,.6);z-index:14;pointer-events:none;display:none;border-radius:1px"></div>`;
   html+=`<div id="hover-lbl" style="position:absolute;z-index:16;font-size:8px;background:rgba(255,214,0,.6);color:#000;padding:1px 4px;border-radius:2px;pointer-events:none;white-space:nowrap;font-weight:600;bottom:2px;display:none"></div>`;
 
+  // Today line (blue)
+  const todayOff=dO(new Date());
+  if(todayOff>=0 && todayOff<td){
+    const todayX=todayOff*DW;
+    html+=`<div style="position:absolute;top:0;bottom:0;left:${todayX}px;width:2px;background:#2196F3;z-index:12;pointer-events:none;opacity:.8"></div>`;
+    html+=`<div style="position:absolute;top:0;left:${todayX-16}px;background:#2196F3;color:#fff;font-size:8px;font-weight:700;padding:1px 4px;border-radius:0 0 3px 3px;z-index:13;pointer-events:none">TODAY</div>`;
+  }
+
   // SVG overlay
   html+=`<svg id="handoff-svg" class="handoff-svg" width="${gw}" height="1"></svg>`;
   html+=`</div>`;
@@ -1108,6 +1116,8 @@ function adHocRows(missions,td){
       </div>`;
       // Heli lane backgrounds
       barsHtml+=`<div style="position:absolute;left:${ml}px;width:${mw}px;top:${titleH}px;height:${heliH*m.hc}px;background:${m.color};border-left:1px solid ${m.color};border-right:1px solid ${m.color};border-bottom:1px solid ${m.color};border-radius:0 0 4px 4px;pointer-events:none;z-index:0">${weekTicksHTML(ml,mw,'rgba(255,255,255,.15)')}</div>`;
+      // Mission name below the bar
+      barsHtml+=`<div style="position:absolute;left:${ml}px;width:${mw}px;top:${titleH+heliH*m.hc}px;font-size:8px;font-weight:600;color:${m.color};text-align:center;pointer-events:none;white-space:nowrap;overflow:visible;z-index:3">${m.name}</div>`;
       // Per-heli drop zones and assignment bars
       for(let hi=0;hi<m.hc;hi++){
         const laneTop=titleH+hi*heliH;
@@ -1465,7 +1475,7 @@ function drawHandoffLines(){
         const y2=pilotYMap[a2.pilot];
         if(!y1||!y2) continue;
 
-        const x1=LW+Math.min(tD(),dO(D(a1.end)))*DW;
+        const x1=LW+Math.min(tD(),dO(D(a1.end))+1)*DW;
         const x2=LW+Math.max(0,dO(D(a2.start)))*DW;
         const cy1=y1.cy, cy2=y2.cy;
 
