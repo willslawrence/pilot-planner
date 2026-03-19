@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Pilot Availability Planner v3.17 — THC H125</title>
+<title>Pilot Availability Planner v3.18 — THC H125</title>
 <style>
 :root {
   --bg: #0f1123;
@@ -148,7 +148,7 @@ html.light .h-row { background:#fff; }
 <body>
 
 <div class="header">
-  <h1>🚁 Pilot Availability Planner <span id="app-version" style="font-size:12px;opacity:.6;font-weight:400">v3.17</span></h1>
+  <h1>🚁 Pilot Availability Planner <span id="app-version" style="font-size:12px;opacity:.6;font-weight:400">v3.18</span></h1>
   <div class="ctrls">
     <button class="theme-btn" onclick="toggleTheme()" id="themeBtn" title="Toggle light/dark theme">🌙</button>
     <button onclick="goToday()">Today</button>
@@ -677,7 +677,7 @@ function tD(){ return dB(T0,T1); }
 
 
 // ====== CONSTANTS ======
-const T0=new Date(2026,1,1), T1=new Date(2027,0,31), DW=17, LW=128;
+const T0=new Date(2026,1,1), T1=new Date(2027,0,31), DW=17, LW=160;
 
 function updateFirstNameCount() {
   const _fnCount = {};
@@ -811,7 +811,13 @@ function monthsHtml(td){
     const bg=(dow===5||dow===6)?'background:rgba(255,255,255,.03);':'';
     dRow+=`<div style="position:absolute;left:${LW+i*DW}px;width:${DW}px;height:16px;display:flex;align-items:center;justify-content:center;font-size:8px;color:${isFri?'var(--accent)':'var(--muted)'};${border}${bg}">${day}</div>`;
   }
-  return {html:`<div class="mrow" style="width:${gw}px;flex-direction:column;position:sticky;top:0;z-index:20"><div style="position:relative;height:18px;width:${gw}px">${mRow}</div><div style="position:relative;height:16px;width:${gw}px">${dRow}</div></div>`, months};
+  // Today marker in month row
+  const todayHeaderOff=dO(new Date());
+  let todayMarker='';
+  if(todayHeaderOff>=0 && todayHeaderOff<td){
+    todayMarker=`<div style="position:absolute;left:${LW+todayHeaderOff*DW-1}px;top:0;width:3px;height:18px;background:#2196F3;z-index:25;pointer-events:none"></div><div style="position:absolute;left:${LW+todayHeaderOff*DW-14}px;top:1px;background:#2196F3;color:#fff;font-size:7px;font-weight:700;padding:1px 3px;border-radius:2px;z-index:26;pointer-events:none">TODAY</div>`;
+  }
+  return {html:`<div class="mrow" style="width:${gw}px;flex-direction:column;position:sticky;top:0;z-index:20"><div style="position:relative;height:18px;width:${gw}px">${mRow}${todayMarker}</div><div style="position:relative;height:16px;width:${gw}px">${dRow}</div></div>`, months};
 }
 
 function weekOverlays(td){
@@ -936,12 +942,11 @@ function render(){
   html+=`<div id="hover-cur" style="position:absolute;top:0;bottom:0;width:3px;background:rgba(255,214,0,.6);z-index:14;pointer-events:none;display:none;border-radius:1px"></div>`;
   html+=`<div id="hover-lbl" style="position:absolute;z-index:16;font-size:8px;background:rgba(255,214,0,.6);color:#000;padding:1px 4px;border-radius:2px;pointer-events:none;white-space:nowrap;font-weight:600;bottom:2px;display:none"></div>`;
 
-  // Today line (blue)
+  // Today line (blue vertical, label is in month header)
   const todayOff=dO(new Date());
   if(todayOff>=0 && todayOff<td){
     const todayX=todayOff*DW;
-    html+=`<div style="position:absolute;top:0;bottom:0;left:${todayX}px;width:2px;background:#2196F3;z-index:12;pointer-events:none;opacity:.8"></div>`;
-    html+=`<div style="position:absolute;top:0;left:${todayX-16}px;background:#2196F3;color:#fff;font-size:8px;font-weight:700;padding:1px 4px;border-radius:0 0 3px 3px;z-index:13;pointer-events:none">TODAY</div>`;
+    html+=`<div style="position:absolute;top:0;bottom:0;left:${todayX}px;width:2px;background:#2196F3;z-index:12;pointer-events:none;opacity:.7"></div>`;
   }
 
   // SVG overlay
