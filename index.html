@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Pilot Availability Planner v3.18 — THC H125</title>
+<title>Pilot Availability Planner v3.19 — THC H125</title>
 <style>
 :root {
   --bg: #0f1123;
@@ -148,8 +148,9 @@ html.light .h-row { background:#fff; }
 <body>
 
 <div class="header">
-  <h1>🚁 Pilot Availability Planner <span id="app-version" style="font-size:12px;opacity:.6;font-weight:400">v3.18</span></h1>
+  <h1>🚁 Pilot Availability Planner <span id="app-version" style="font-size:12px;opacity:.6;font-weight:400">v3.19</span></h1>
   <div class="ctrls">
+    <button onclick="showAddRotHeader(event)" title="Add a rotation block (workover, ON, OFF)">+ Rotation</button>
     <button class="theme-btn" onclick="toggleTheme()" id="themeBtn" title="Toggle light/dark theme">🌙</button>
     <button onclick="goToday()">Today</button>
     <button id="commitBtn" onclick="commitChanges()" title="Save changes to Google Sheets" style="position:relative;">💾 Commit</button>
@@ -1262,6 +1263,29 @@ function showRotPop(e, pilot, ri){
     </div>
   `;
   div._rotCtx = {pilot, ri, isNew:false};
+  document.body.appendChild(div);
+  pop=div;
+  popPos(div,e);
+  setTimeout(()=>document.addEventListener('click',cPop2),10);
+}
+
+function showAddRotHeader(e){
+  if(pop) pop.remove();
+  const div = document.createElement('div');
+  div.className='pop';
+  div.style.top=Math.min(e.clientY+5,innerHeight-400)+'px';
+  div.style.left=Math.min(e.clientX,innerWidth-250)+'px';
+  div.innerHTML=`
+    <div style="font-weight:700;font-size:12px;margin-bottom:6px">Add Rotation</div>
+    <div style="font-size:10px;color:var(--muted);margin-bottom:6px">Select a pilot:</div>
+    <div style="max-height:300px;overflow-y:auto">
+      ${PILOTS.filter(p=>!['Matthias Klemp','Roberto Piani','Gilles Plaisance'].includes(p.name)).map(p=>{
+        const onNow=isOn(p,F(new Date()));
+        const safePN=p.name.replace(/'/g,"\\'");
+        return `<div onclick="cPop();showAddRotPop(event,'${safePN}')" style="padding:4px 8px;cursor:pointer;border-radius:4px;font-size:11px;display:flex;align-items:center;gap:6px" onmouseover="this.style.background='var(--surface2)'" onmouseout="this.style.background='transparent'"><span style="width:8px;height:8px;border-radius:50%;background:${onNow?'#10B981':'#F87171'};flex-shrink:0"></span>${p.name}</div>`;
+      }).join('')}
+    </div>
+  `;
   document.body.appendChild(div);
   pop=div;
   popPos(div,e);
