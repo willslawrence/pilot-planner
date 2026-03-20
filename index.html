@@ -184,6 +184,7 @@ let MISSIONS = [];
 let ROTATIONS = [];
 let ORIGINAL_ASSIGNMENTS = {}; // Store original state for dirty checking
 let ORIGINAL_MISSIONS = []; // Store original mission state for dirty checking
+let ORIGINAL_MISSIONS_LOADED = []; // Immutable copy of missions as loaded from Sheet (never modified by local edits)
 let ORIGINAL_ROTATIONS = ''; // Store original rotation state for dirty checking
 let lastCommitTime = null;
 let isDirty = false;
@@ -276,6 +277,7 @@ async function fetchFromAPI() {
     // Store original state for dirty checking
     ORIGINAL_ASSIGNMENTS = JSON.parse(JSON.stringify(apiAssignments));
     ORIGINAL_MISSIONS = JSON.parse(JSON.stringify(MISSIONS));
+    ORIGINAL_MISSIONS_LOADED = JSON.parse(JSON.stringify(MISSIONS)); // Immutable — never updated by local edits
     ORIGINAL_ROTATIONS = JSON.stringify(PILOTS.map(p=>({n:p.name,rot:p.rot})));
     return apiAssignments;
     
@@ -323,20 +325,19 @@ async function commitToAPI() {
       if (!result.success) throw new Error('Assignments write failed');
     }
 
-    // Also commit mission changes (color, name, type, dates, heli count)
-    const missionRows = MISSIONS.map(m => [
-      m.id,
-      m.name,
-      m.type,
-      `${m.start}T00:00:00.000Z`,
-      `${m.end}T00:00:00.000Z`,
-      m.hc,
-      m.color,
-      m.status || '',
-      m.obsidianFile || '',
-      timestamp,
-      m.helicopters ? JSON.stringify(m.helicopters) : ''
-    ]);
+    // Mission data is READ-ONLY from Sheet (Obsidian is source of truth).
+    // We write missions back with ORIGINAL loaded data (not local edits) to preserve colors.
+    // Colors are the only field the Planner can change; all other mission fields
+    // (name, dates, helicopters) are controlled by Obsidian → Sheet forward sync.
+    const missionRows = MISSIONS.map(m => {
+      const orig = ORIGINAL_MISSIONS_LOADED.find(o => o.id === m.id) || m;
+      return [
+        orig.id, orig.name, orig.type,
+        `${orig.start}T00:00:00.000Z`, `${orig.end}T00:00:00.000Z`,
+        orig.hc, m.color, orig.status || '', orig.obsidianFile || '',
+        timestamp, orig.helicopters ? JSON.stringify(orig.helicopters) : ''
+      ];
+    });
     const mResp = await fetch(`${BASE_URL}?action=write&sheet=Missions`, {
       method: 'POST',
       headers: { 'Content-Type': 'text/plain' },
@@ -380,21 +381,8 @@ async function commitToAPI() {
     lastCommitTime = new Date();
     updateDirtyState();
 
-    // Notify local sync server (Planner → Obsidian reverse sync)
-    // Fire-and-forget: if Mac is offline or server isn't running, silently ignore
-    try {
-      fetch('http://127.0.0.1:9876/planner-sync', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          missions: MISSIONS.map(m => ({
-            id: m.id, name: m.name, start: m.start, end: m.end,
-            hc: m.hc, color: m.color, status: m.status
-          })),
-          timestamp: new Date().toISOString()
-        })
-      }).catch(() => {}); // silent fail
-    } catch(e) {} // double safety
+    // Reverse sync removed — Obsidian is the single source of truth for mission data.
+    // Planner only writes assignments + rotations + colors back to Sheet.
 
     return result;
   } catch (error) {
