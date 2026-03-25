@@ -113,6 +113,7 @@ html.light .h-row { background:#fff; }
 .duty-blk.on { opacity:.55; }
 .duty-blk.off { background:#F87171; opacity:.22; }
 .duty-blk.workover { opacity:.55; background-image:repeating-linear-gradient(45deg,transparent,transparent 4px,rgba(66,165,245,.4) 4px,rgba(66,165,245,.4) 8px); }
+.duty-blk.vacation-extra { opacity:.55; background:#F59E0B; background-image:repeating-linear-gradient(45deg,transparent,transparent 4px,rgba(255,255,255,.15) 4px,rgba(255,255,255,.15) 8px); }
 
 .pa-block { position:absolute; top:7px; height:13px; border-radius:3px; display:flex; align-items:center; padding:0 4px; font-size:7px; font-weight:700; color:#fff; z-index:3; overflow:hidden; white-space:nowrap; text-overflow:ellipsis; border:1px solid rgba(255,255,255,.25); cursor:pointer; letter-spacing:.3px; }
 
@@ -169,6 +170,7 @@ html.light .h-row { background:#fff; }
   <div class="leg"><input type="color" id="cc-mg" style="width:14px;height:14px;border:none;padding:0;cursor:pointer;border-radius:2px" onchange="PILOT_COLORS.mg=this.value;savePilotColors();render()"> Management</div>
   <div class="leg"><div class="lsw" style="background:var(--red)"></div> Rally</div>
   <div class="leg"><div class="lsw" style="background:var(--gray)"></div> Off Rotation</div>
+  <div class="leg"><div class="lsw" style="background:#F59E0B"></div> Vacation Extra</div>
   <div class="leg"><div class="lsw" style="background:var(--yellow)"></div> Cursor</div>
   <div class="leg"><svg width="20" height="10"><path d="M0 8 Q10 0 20 8" stroke="var(--accent)" fill="none" stroke-width="2"/></svg> Handoff</div>
   <span style="margin-left:auto;font-size:10px">Drag pilot → heli slot · Click mission label to edit · Click rotation bar to edit</span>
@@ -404,11 +406,17 @@ function buildRotationsForPilot(pilotName, rotations) {
   
   // Convert rotation data to the format expected by the app
   for (const rotation of pilotRotations) {
-    if (rotation.type === 'OFF' || rotation.type === 'VACATION') {
+    if (rotation.type === 'OFF') {
       result.push({
         s: rotation.start,
         e: rotation.end,
         st: 'OFF'
+      });
+    } else if (rotation.type === 'VACATION') {
+      result.push({
+        s: rotation.start,
+        e: rotation.end,
+        st: 'VACATION_EXTRA'
       });
     }
   }
@@ -685,6 +693,7 @@ function dispName(n) {
 let sel=new Date(), pop=null;
 
 function isOn(p,ds){for(const r of p.rot)if(ds>=r.s&&ds<=r.e&&(r.st==='ON'||r.st==='WORKOVER'))return true;return false;}
+function isVacExtra(p,ds){for(const r of p.rot)if(ds>=r.s&&ds<=r.e&&r.st==='VACATION_EXTRA')return true;return false;}
 function getRotStatus(p,ds){for(const r of p.rot)if(ds>=r.s&&ds<=r.e)return r.st;return 'OFF';}
 function pg(p){if(p.mg) return 'mg';const cats=p.quals.join(' ');const u=cats.includes('UAM'),s=cats.includes('Survey');return u&&s?'both':u?'uam':'survey';}
 const PILOT_COLORS=JSON.parse(localStorage.getItem('pp_pilotColors')||'null')||{uam:'#87CEEB',both:'#1a3a6b',survey:'#FF8C00',mg:'#9CA3AF'};
@@ -1147,7 +1156,7 @@ function pilotRow(p,td,ds){
     const rl=Math.max(0,rawL)*DW, rw=Math.max(0,(Math.min(td,rawR+1)-Math.max(0,rawL))*DW);
     if(rw<=0) continue;
 
-    if(r.st==='ON'||r.st==='WORKOVER'){
+    if(r.st==='ON'||r.st==='WORKOVER'||r.st==='VACATION_EXTRA'){
       const sLabel=r.s.slice(5);
       const eLabel=r.e.slice(5);
       // Calculate week count
@@ -1157,11 +1166,13 @@ function pilotRow(p,td,ds){
       const isStandard = days===42; // exactly 6 weeks
       const weekLabel = isStandard ? '6W' : (remDays===0 ? fullWeeks+'W' : fullWeeks+'W+'+remDays+'D');
       const centerCls = isStandard ? 'rot-center' : 'rot-center warn';
-      const blkCls = r.st==='WORKOVER' ? 'duty-blk workover' : 'duty-blk on';
-      bars+=`<div class="${blkCls}" data-pilot="${p.name}" data-ri="${ri}" style="left:${rl}px;width:${rw}px;background:${r.st==='WORKOVER'?'#42A5F5':'#10B981'}">
+      const blkCls = r.st==='WORKOVER' ? 'duty-blk workover' : r.st==='VACATION_EXTRA' ? 'duty-blk vacation-extra' : 'duty-blk on';
+      const bgColor = r.st==='WORKOVER' ? '#42A5F5' : r.st==='VACATION_EXTRA' ? '#F59E0B' : '#10B981';
+      const label = r.st==='VACATION_EXTRA' ? 'VAC' : weekLabel;
+      bars+=`<div class="${blkCls}" data-pilot="${p.name}" data-ri="${ri}" style="left:${rl}px;width:${rw}px;background:${bgColor}">
         ${weekTicksHTML(rl,rw,'rgba(255,255,255,.2)')}
         <span class="rot-date rot-start">${sLabel}</span>
-        <span class="${centerCls}">${weekLabel}</span>
+        <span class="${centerCls}">${label}</span>
         <span class="rot-date rot-end">${eLabel}</span>
       </div>`;
     } else {
@@ -1243,6 +1254,7 @@ function showRotPop(e, pilot, ri){
       <option value="ON"${r.st==='ON'?' selected':''}>ON</option>
       <option value="OFF"${r.st==='OFF'?' selected':''}>OFF</option>
       <option value="WORKOVER"${r.st==='WORKOVER'?' selected':''}>WORKOVER</option>
+      <option value="VACATION_EXTRA"${r.st==='VACATION_EXTRA'?' selected':''}>VACATION EXTRA</option>
     </select>
     <div class="pb">
       <button class="pdel" onclick="deleteRot()">Delete</button>
@@ -1319,6 +1331,7 @@ function showAddRotPop(e, pilotName){
       <option value="ON">ON</option>
       <option value="OFF">OFF</option>
       <option value="WORKOVER" selected>WORKOVER</option>
+      <option value="VACATION_EXTRA">VACATION EXTRA</option>
     </select>
     <div class="pb">
       <button class="pcancel" onclick="cPop()">Cancel</button>
