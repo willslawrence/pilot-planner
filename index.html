@@ -402,9 +402,25 @@ function parseDateFromISO(isoString) {
 
 function buildRotationsForPilot(pilotName, rotations) {
   const pilotRotations = rotations.filter(r => r.pilot === pilotName);
+  
+  // If the sheet has explicit rotation blocks (ON/OFF/WORKOVER/VACATION_EXTRA),
+  // use them directly — these are committed edits from the Planner.
+  const hasExplicitBlocks = pilotRotations.some(r => 
+    r.type === 'ON' || r.type === 'WORKOVER' || r.type === 'VACATION_EXTRA'
+  );
+  
+  if (hasExplicitBlocks) {
+    // Sheet has full rotation data — use as-is
+    return pilotRotations.map(r => ({
+      s: r.start,
+      e: r.end,
+      st: r.type
+    })).sort((a, b) => a.s.localeCompare(b.s));
+  }
+  
+  // Fallback: only OFF/VACATION entries (from Fleetplan import) — fill gaps with ON
   const result = [];
   
-  // Convert rotation data to the format expected by the app
   for (const rotation of pilotRotations) {
     if (rotation.type === 'OFF') {
       result.push({
@@ -426,10 +442,8 @@ function buildRotationsForPilot(pilotName, rotations) {
   const year2026End = '2026-12-31';
   
   if (result.length === 0) {
-    // No OFF periods, entire year is ON
     result.push({ s: year2026Start, e: year2026End, st: 'ON' });
   } else {
-    // Sort OFF periods by start date
     result.sort((a, b) => a.s.localeCompare(b.s));
     
     const onPeriods = [];
@@ -437,7 +451,6 @@ function buildRotationsForPilot(pilotName, rotations) {
     
     for (const offPeriod of result) {
       if (currentDate < offPeriod.s) {
-        // Add ON period before this OFF period
         onPeriods.push({
           s: currentDate,
           e: addDaysL(offPeriod.s, -1),
@@ -447,7 +460,6 @@ function buildRotationsForPilot(pilotName, rotations) {
       currentDate = addDaysL(offPeriod.e, 1);
     }
     
-    // Add final ON period if needed
     if (currentDate <= year2026End) {
       onPeriods.push({
         s: currentDate,
@@ -456,7 +468,6 @@ function buildRotationsForPilot(pilotName, rotations) {
       });
     }
     
-    // Combine OFF and ON periods and sort
     result.push(...onPeriods);
     result.sort((a, b) => a.s.localeCompare(b.s));
   }
