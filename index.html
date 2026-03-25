@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Pilot Availability Planner v3.20 — THC H125</title>
+<title>Pilot Availability Planner v3.22 — THC H125</title>
 <style>
 :root {
   --bg: #0f1123;
@@ -108,8 +108,8 @@ html.light .h-row { background:#fff; }
 .rot-date { position:absolute; bottom:1px; font-size:10px; font-weight:700; color:#fff; opacity:.9; pointer-events:none; white-space:nowrap; text-shadow:0 1px 2px rgba(0,0,0,.5); }
 .rot-start { left:3px; }
 .rot-end { right:3px; }
-.rot-center { position:absolute; left:50%; top:50%; transform:translate(-50%,-50%); font-size:11px; font-weight:700; color:#fff; text-shadow:0 1px 2px rgba(0,0,0,.5); }
-.rot-center.warn { color:#ff4444; font-size:10px; text-shadow:0 0 4px rgba(255,0,0,.5); }
+.rot-center { position:absolute; left:50%; top:50%; transform:translate(-50%,-50%); font-size:13px; font-weight:700; color:#fff; text-shadow:0 1px 2px rgba(0,0,0,.5); }
+.rot-center.warn { color:#ff4444; font-size:13px; text-shadow:0 0 4px rgba(255,0,0,.5); }
 .duty-blk.on { opacity:.55; }
 .duty-blk.off { background:#F87171; opacity:.22; }
 .duty-blk.workover { opacity:.55; background-image:repeating-linear-gradient(45deg,transparent,transparent 4px,rgba(66,165,245,.4) 4px,rgba(66,165,245,.4) 8px); }
@@ -149,7 +149,7 @@ html.light .h-row { background:#fff; }
 <body>
 
 <div class="header">
-  <h1>🚁 Pilot Availability Planner <span id="app-version" style="font-size:12px;opacity:.6;font-weight:400">v3.20</span></h1>
+  <h1>🚁 Pilot Availability Planner <span id="app-version" style="font-size:12px;opacity:.6;font-weight:400">v3.22</span></h1>
   <div class="ctrls">
     <button onclick="showWorkoverPop(event)" title="Add a workover for a pilot">+ Work Over</button>
     <button class="theme-btn" onclick="toggleTheme()" id="themeBtn" title="Toggle light/dark theme">🌙</button>
@@ -1175,7 +1175,7 @@ function pilotRow(p,td,ds){
       const fullWeeks = Math.floor(days/7);
       const remDays = days % 7;
       const isStandard = days===42; // exactly 6 weeks
-      const weekLabel = isStandard ? '6W' : (remDays===0 ? fullWeeks+'W' : fullWeeks+'W+'+remDays+'D');
+      const weekLabel = isStandard ? '6w' : (remDays===0 ? fullWeeks+'w' : fullWeeks+'w + '+remDays+'d');
       const centerCls = isStandard ? 'rot-center' : 'rot-center warn';
       const blkCls = r.st==='WORKOVER' ? 'duty-blk workover' : r.st==='VACATION_EXTRA' ? 'duty-blk vacation-extra' : 'duty-blk on';
       const bgColor = r.st==='WORKOVER' ? '#42A5F5' : r.st==='VACATION_EXTRA' ? '#F59E0B' : '#10B981';
@@ -1187,7 +1187,13 @@ function pilotRow(p,td,ds){
         <span class="rot-date rot-end">${eLabel}</span>
       </div>`;
     } else {
-      bars+=`<div class="duty-blk off" data-pilot="${p.name}" data-ri="${ri}" style="left:${rl}px;width:${rw}px"></div>`;
+      const offDays = dB(D(r.s),D(r.e))+1;
+      const offWeeks = Math.floor(offDays/7);
+      const offRem = offDays % 7;
+      const offStandard = offDays===42;
+      const offLabel = offStandard ? '6w' : (offRem===0 ? offWeeks+'w' : offWeeks+'w + '+offRem+'d');
+      const offCls = offStandard ? 'rot-center' : 'rot-center warn';
+      bars+=`<div class="duty-blk off" data-pilot="${p.name}" data-ri="${ri}" style="left:${rl}px;width:${rw}px"><span class="${offCls}">${offLabel}</span></div>`;
     }
   }
   // Pilot assignment blocks on pilot row
