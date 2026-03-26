@@ -87,6 +87,7 @@ html.light .h-row { background:#fff; }
 .abar:hover { filter:brightness(1.15); z-index:3; }
 .abar .ax { position:absolute; right:-8px; top:-8px; width:16px; height:16px; background:var(--red); color:#fff; border-radius:50%; display:none; align-items:center; justify-content:center; font-size:10px; line-height:1; cursor:pointer; border:2px solid var(--bg); }
 .abar:hover .ax { display:flex; }
+body.viewer-mode .abar:hover .ax { display:none; }
 .abar-grip { position:absolute; top:0; bottom:0; width:6px; cursor:ew-resize; z-index:4; }
 .abar-grip-l { left:-2px; border-radius:4px 0 0 4px; }
 .abar-grip-r { right:-2px; border-radius:0 4px 4px 0; }
@@ -150,7 +151,7 @@ html.light .h-row { background:#fff; }
 <body>
 
 <div class="header">
-  <h1>🚁 Pilot Availability Planner <span id="app-version" style="font-size:12px;opacity:.6;font-weight:400">v3.25</span></h1>
+  <h1>🚁 Pilot Availability Planner <span id="app-version" style="font-size:12px;opacity:.6;font-weight:400">v3.26</span></h1>
   <div class="ctrls">
     <button onclick="showWorkoverPop(event)" title="Add a workover for a pilot">+ Work Over</button>
     <button class="theme-btn" onclick="toggleTheme()" id="themeBtn" title="Toggle light/dark theme">🌙</button>
@@ -192,6 +193,58 @@ let ORIGINAL_MISSIONS_LOADED = []; // Immutable copy of missions as loaded from 
 let ORIGINAL_ROTATIONS = ''; // Store original rotation state for dirty checking
 let lastCommitTime = null;
 let isDirty = false;
+
+// ====== ADMIN MODE ======
+let adminMode = false;
+let versionClickCount = 0;
+let versionClickTimer = null;
+
+function initAdminToggle(){
+  const vEl = document.getElementById('app-version');
+  if(!vEl) return;
+  vEl.style.cursor='pointer';
+  vEl.addEventListener('click', ()=>{
+    versionClickCount++;
+    if(versionClickTimer) clearTimeout(versionClickTimer);
+    versionClickTimer = setTimeout(()=>{ versionClickCount=0; }, 800);
+    if(versionClickCount>=3){
+      versionClickCount=0;
+      adminMode=!adminMode;
+      applyAdminMode();
+      showMessage(adminMode?'🔓 Admin mode ON':'🔒 Admin mode OFF','info');
+    }
+  });
+}
+
+function applyAdminMode(){
+  // Body class for CSS overrides
+  document.body.classList.toggle('viewer-mode', !adminMode);
+  // Commit & Reset buttons
+  const commitBtn=document.getElementById('commitBtn');
+  const resetBtns=document.querySelectorAll('.ctrls button');
+  if(commitBtn) commitBtn.style.display=adminMode?'':'none';
+  resetBtns.forEach(b=>{if(b.textContent.includes('🗑️')) b.style.display=adminMode?'':'none';});
+  // Add Mission & Add Pilot buttons
+  document.querySelectorAll('.add-btn').forEach(el=>el.style.display=adminMode?'':'none');
+  // Pilot row "+" rotation add buttons
+  document.querySelectorAll('.rot-add-btn').forEach(el=>el.style.display=adminMode?'':'none');
+  // Rotation bars: clickable only in admin mode
+  document.querySelectorAll('.duty-blk').forEach(blk=>{
+    blk.style.cursor=adminMode?'pointer':'default';
+  });
+  // Pilot rows: draggable only in admin mode
+  document.querySelectorAll('.p-row').forEach(row=>{
+    row.setAttribute('draggable', adminMode?'true':'false');
+    row.style.cursor=adminMode?'grab':'default';
+  });
+  // Version badge color hint (gold = admin)
+  const vEl=document.getElementById('app-version');
+  if(vEl) vEl.style.color=adminMode?'#F59E0B':'';
+  // Assignment blocks: only editable in admin
+  document.querySelectorAll('.pa-block').forEach(blk=>{
+    blk.style.cursor=adminMode?'pointer':'default';
+  });
+}
 
 // ====== API FUNCTIONS ======
 async function fetchFromAPI() {
@@ -962,10 +1015,10 @@ function render(){
   const todayOff=dO(new Date());
   if(todayOff>0){
     const pastW=Math.min(todayOff,td)*DW;
-    html+=`<div style="position:absolute;top:0;bottom:0;left:0;width:${pastW}px;background:rgba(128,128,128,.08);z-index:1;pointer-events:none"></div>`;
+    html+=`<div style="position:absolute;top:0;bottom:0;left:${LW}px;width:${pastW}px;background:rgba(128,128,128,.08);z-index:1;pointer-events:none"></div>`;
   }
   if(todayOff>=0 && todayOff<td){
-    const todayX=todayOff*DW;
+    const todayX=LW+todayOff*DW;
     html+=`<div style="position:absolute;top:0;bottom:0;left:${todayX}px;width:2px;background:#2196F3;z-index:12;pointer-events:none;opacity:.7"></div>`;
   }
 
@@ -990,6 +1043,7 @@ function render(){
   setupPilotRowClicks();
   setupRotationClicks();
   drawHandoffLines();
+  applyAdminMode();
 }
 
 function secRow(label,color,td){
@@ -1247,6 +1301,7 @@ function setupRotationClicks(){
   document.querySelectorAll('.duty-blk').forEach(blk=>{
     blk.addEventListener('click', e=>{
       e.stopPropagation();
+      if(!adminMode) return;
       const pilotName = blk.dataset.pilot;
       const ri = parseInt(blk.dataset.ri);
       if(!pilotName || isNaN(ri)) return;
@@ -1319,7 +1374,7 @@ function showWorkoverPop(e){
   popPos(div,e);
   setTimeout(()=>document.addEventListener('click',cPop2),10);
 }
-function saveWorkoverPop(){
+async function saveWorkoverPop(){
   const pilotName=document.getElementById('wo-pilot').value;
   const start=document.getElementById('wo-start').value;
   const end=document.getElementById('wo-end').value;
@@ -1330,6 +1385,15 @@ function saveWorkoverPop(){
   pilot.rot.sort((a,b)=>a.s.localeCompare(b.s));
   cPop();
   render();
+  // In normal (non-admin) mode, auto-commit the workover to the sheet
+  if(!adminMode){
+    try {
+      await commitToAPI();
+      showMessage('✅ Work over saved to Google Sheets!','success');
+    } catch(err){
+      showMessage('❌ Failed to save work over: '+err.message,'error');
+    }
+  }
 }
 
 function showAddRotPop(e, pilotName){
@@ -1484,6 +1548,7 @@ function setupAssignmentClicks(){
     bar.addEventListener('click',e=>{
       if(e.target.closest('.ax')) return;
       e.stopPropagation();
+      if(!adminMode) return;
       const mid=bar.dataset.amid;
       const hi=parseInt(bar.dataset.ahi);
       const pilot=bar.dataset.apilot;
@@ -1497,9 +1562,10 @@ function setupAssignmentClicks(){
 function setupPilotRowClicks(){
   document.querySelectorAll('.pa-block[data-pa-pilot]').forEach(blk=>{
     blk.style.pointerEvents='auto';
-    blk.style.cursor='pointer';
+    blk.style.cursor=adminMode?'pointer':'default';
     blk.addEventListener('click',e=>{
       e.stopPropagation();
+      if(!adminMode) return;
       const pilot=blk.dataset.paPilot;
       const mid=parseInt(blk.dataset.paMid);
       const hi=parseInt(blk.dataset.paHi);
@@ -1666,6 +1732,7 @@ function setupMissionDrag(){
   document.querySelectorAll('.mbar[data-mid]').forEach(bar=>{
     bar.addEventListener('mousedown',e=>{
       if(e.target.closest('.ax')) return;
+      if(!adminMode) return;
       e.preventDefault();e.stopPropagation();
       const mid=bar.dataset.mid;
       const m=MISSIONS.find(mm=>mm.id===mid);if(!m) return;
@@ -1690,6 +1757,7 @@ function setupAssignmentResize(){
   // Resize grips (mouse + touch)
   document.querySelectorAll('.abar-grip').forEach(grip=>{
     function startResize(e){
+      if(!adminMode) return;
       e.preventDefault();e.stopPropagation();
       const isTouch=e.type==='touchstart';
       const edge=grip.dataset.edge;
@@ -1869,10 +1937,11 @@ function setupDrops(){
     const mid=zone.dataset.mid,hi=parseInt(zone.dataset.hi);
     zone.addEventListener('dragover',e=>{e.preventDefault();e.stopPropagation();zone.style.background='rgba(76,175,80,.12)';});
     zone.addEventListener('dragleave',e=>{zone.style.background='';});
-    zone.addEventListener('drop',e=>{e.stopPropagation();zone.style.background='';handleDrop(e,mid,hi);});
+    zone.addEventListener('drop',e=>{e.stopPropagation();zone.style.background='';if(!adminMode) return;handleDrop(e,mid,hi);});
     // Tap-to-assign for mobile (click on empty heli lane)
     zone.addEventListener('click',e=>{
       if(e.target.closest('.abar')) return; // don't trigger on existing bars
+      if(!adminMode) return;
       e.stopPropagation();
       const m=MISSIONS.find(mm=>mm.id===mid);if(!m) return;
       const wrap=document.getElementById('content-wrap');
@@ -2182,6 +2251,8 @@ async function initApp() {
   } finally {
     hideLoading();
     render();
+    initAdminToggle();
+    applyAdminMode(); // default: normal mode (adminMode=false)
     setTimeout(scr, 50);
   }
 }
