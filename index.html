@@ -1181,7 +1181,7 @@ function pilotRow(p,td,ds){
       const centerCls = isStandard ? 'rot-center' : 'rot-center warn';
       const blkCls = r.st==='WORKOVER' ? 'duty-blk workover' : r.st==='VACATION_EXTRA' ? 'duty-blk vacation-extra' : r.st==='AVAILABLE_WORKOVER' ? 'duty-blk available-workover' : 'duty-blk on';
       const bgColor = r.st==='WORKOVER' ? '#42A5F5' : r.st==='VACATION_EXTRA' ? '#F59E0B' : r.st==='AVAILABLE_WORKOVER' ? '#F472B6' : '#10B981';
-      const label = r.st==='VACATION_EXTRA' ? 'VAC' : r.st==='AVAILABLE_WORKOVER' ? 'AVAIL' : weekLabel;
+      const label = weekLabel;
       bars+=`<div class="${blkCls}" data-pilot="${p.name}" data-ri="${ri}" style="left:${rl}px;width:${rw}px;background:${bgColor}">
         ${weekTicksHTML(rl,rw,'rgba(255,255,255,.2)')}
         <span class="rot-date rot-start">${sLabel}</span>
@@ -1258,6 +1258,11 @@ function showRotPop(e, pilot, ri){
   div.innerHTML=`
     <div style="font-weight:700;font-size:12px;margin-bottom:4px">Edit Rotation</div>
     <div style="font-size:11px;color:var(--accent);margin-bottom:6px">${pilot.name}</div>
+    <div class="pb" style="margin-bottom:8px">
+      <button class="pdel" onclick="deleteRot()">Delete</button>
+      <button class="pcancel" onclick="cPop()">Cancel</button>
+      <button class="psave" onclick="saveRotPop()">Save</button>
+    </div>
     <label>Start Date</label>
     <input type="date" id="rot-start" value="${r.s}">
     <label>End Date</label>
@@ -1270,11 +1275,6 @@ function showRotPop(e, pilot, ri){
       <option value="AVAILABLE_WORKOVER"${r.st==='AVAILABLE_WORKOVER'?' selected':''}>AVAILABLE TO WORK OVER</option>
       <option value="VACATION_EXTRA"${r.st==='VACATION_EXTRA'?' selected':''}>VACATION EXTRA</option>
     </select>
-    <div class="pb">
-      <button class="pdel" onclick="deleteRot()">Delete</button>
-      <button class="pcancel" onclick="cPop()">Cancel</button>
-      <button class="psave" onclick="saveRotPop()">Save</button>
-    </div>
   `;
   div._rotCtx = {pilot, ri, isNew:false};
   document.body.appendChild(div);
@@ -1294,16 +1294,16 @@ function showWorkoverPop(e){
   div.className='pop';
   div.innerHTML=`
     <div style="font-weight:700;font-size:12px;margin-bottom:6px">Add Work Over</div>
+    <div class="pb" style="margin-bottom:8px">
+      <button class="pcancel" onclick="cPop()">Cancel</button>
+      <button class="psave" onclick="saveWorkoverPop()">Save</button>
+    </div>
     <label>Pilot</label>
     <select id="wo-pilot" style="width:100%">${opts}</select>
     <label>Start Date</label>
     <input type="date" id="wo-start" value="${ds}">
     <label>End Date</label>
     <input type="date" id="wo-end" value="${de}">
-    <div class="pb">
-      <button class="pcancel" onclick="cPop()">Cancel</button>
-      <button class="psave" onclick="saveWorkoverPop()">Save</button>
-    </div>
   `;
   document.body.appendChild(div);
   pop=div;
@@ -1336,6 +1336,10 @@ function showAddRotPop(e, pilotName){
   div.innerHTML=`
     <div style="font-weight:700;font-size:12px;margin-bottom:4px">Add Rotation</div>
     <div style="font-size:11px;color:var(--accent);margin-bottom:6px">${pilot.name}</div>
+    <div class="pb" style="margin-bottom:8px">
+      <button class="pcancel" onclick="cPop()">Cancel</button>
+      <button class="psave" onclick="saveRotPop()">Save</button>
+    </div>
     <label>Start Date</label>
     <input type="date" id="rot-start" value="${ds}">
     <label>End Date</label>
@@ -1348,10 +1352,6 @@ function showAddRotPop(e, pilotName){
       <option value="AVAILABLE_WORKOVER">AVAILABLE TO WORK OVER</option>
       <option value="VACATION_EXTRA">VACATION EXTRA</option>
     </select>
-    <div class="pb">
-      <button class="pcancel" onclick="cPop()">Cancel</button>
-      <button class="psave" onclick="saveRotPop()">Save</button>
-    </div>
   `;
   div._rotCtx = {pilot, ri:-1, isNew:true};
   document.body.appendChild(div);
