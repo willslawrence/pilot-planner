@@ -151,9 +151,9 @@ body.viewer-mode .abar:hover .ax { display:none; }
 <body>
 
 <div class="header">
-  <h1>🚁 Pilot Availability Planner <span id="app-version" style="font-size:12px;opacity:.6;font-weight:400">v3.26</span></h1>
+  <h1>🚁 Pilot Availability Planner <span id="app-version" style="font-size:12px;opacity:.6;font-weight:400">v3.27</span></h1>
   <div class="ctrls">
-    <button onclick="showWorkoverPop(event)" title="Add a workover for a pilot">+ Work Over</button>
+    <button onclick="showWorkoverPop(event)" title="Add a rotation for a pilot" id="addRotBtn">+ Work Over</button>
     <button class="theme-btn" onclick="toggleTheme()" id="themeBtn" title="Toggle light/dark theme">🌙</button>
     <button onclick="goToday()">Today</button>
     <button id="commitBtn" onclick="commitChanges()" title="Save changes to Google Sheets" style="position:relative;">💾 Commit</button>
@@ -172,8 +172,8 @@ body.viewer-mode .abar:hover .ax { display:none; }
   <div class="leg"><input type="color" id="cc-mg" style="width:14px;height:14px;border:none;padding:0;cursor:pointer;border-radius:2px" onchange="PILOT_COLORS.mg=this.value;savePilotColors();render()"> Management</div>
   <div class="leg"><div class="lsw" style="background:var(--red)"></div> Rally</div>
   <div class="leg"><div class="lsw" style="background:var(--gray)"></div> Off Rotation</div>
-  <div class="leg"><div class="lsw" style="background:#F59E0B"></div> Vacation Extra</div>
-  <div class="leg"><div class="lsw" style="background:#F472B6"></div> Available to Work Over</div>
+  <div class="leg"><div class="lsw" style="background:#F59E0B"></div> Vacation</div>
+  <div class="leg"><div class="lsw" style="background:#F472B6"></div> Available</div>
   <div class="leg"><div class="lsw" style="background:var(--yellow)"></div> Cursor</div>
   <div class="leg"><svg width="20" height="10"><path d="M0 8 Q10 0 20 8" stroke="var(--accent)" fill="none" stroke-width="2"/></svg> Handoff</div>
   <span style="margin-left:auto;font-size:10px">Drag pilot → heli slot · Click mission label to edit · Click rotation bar to edit</span>
@@ -240,6 +240,9 @@ function applyAdminMode(){
   // Version badge color hint (gold = admin)
   const vEl=document.getElementById('app-version');
   if(vEl) vEl.style.color=adminMode?'#F59E0B':'';
+  // Button label
+  const addRotBtn=document.getElementById('addRotBtn');
+  if(addRotBtn) addRotBtn.textContent=adminMode?'+ Work Over':'+ Add Rotation';
   // Assignment blocks: only editable in admin
   document.querySelectorAll('.pa-block').forEach(blk=>{
     blk.style.cursor=adminMode?'pointer':'default';
@@ -1059,7 +1062,8 @@ function missionRows(m,td){
 
   // Build helicopter lane labels
   let labelHtml = `<div style="display:flex;flex-direction:column;height:100%">`;
-  labelHtml += `<div style="font-weight:600;font-size:11px;color:${m.color};cursor:pointer;height:${titleH}px;display:flex;align-items:center" onclick="showPop(event,'${m.id}')">● ${m.name} <span style="font-weight:400;font-size:9px;opacity:.6;margin-left:4px">${m.hc}x</span></div>`;
+  const labelTip = m.status ? `${m.name} — ${m.status}` : m.name;
+  labelHtml += `<div style="font-weight:600;font-size:11px;color:${m.color};cursor:pointer;height:${titleH}px;display:flex;align-items:center" onclick="showPop(event,'${m.id}')" title="${labelTip.replace(/"/g,'&quot;')}">● ${m.name} <span style="font-weight:400;font-size:9px;opacity:.6;margin-left:4px">${m.hc}x</span></div>`;
   // Get active (non-backup) helicopters for lane labels
   const activeHelis = (m.helicopters || []).filter(h => h.role !== 'backup');
   for(let hi=0;hi<m.hc;hi++){
@@ -1077,7 +1081,8 @@ function missionRows(m,td){
   // Mission background bar spanning all lanes
   // Mission title outside bar, just before the start
   if(ml>0) barsHtml+=`<div style="position:absolute;right:${td*DW-ml+4}px;top:0;height:${titleH}px;display:flex;align-items:center;font-size:9px;font-weight:600;color:${m.color};white-space:nowrap;pointer-events:none;z-index:3">${m.name}</div>`;
-  barsHtml+=`<div class="mbar" data-mid="${m.id}" style="left:${ml}px;width:${mw}px;height:${titleH}px;top:0;bottom:auto;background:${m.color};border:1px solid ${m.color};border-radius:4px 4px 0 0;cursor:grab;z-index:2">
+  const statusTip = m.status ? `${m.name}\nStatus: ${m.status}` : m.name;
+  barsHtml+=`<div class="mbar" data-mid="${m.id}" title="${statusTip.replace(/"/g,'&quot;')}" style="left:${ml}px;width:${mw}px;height:${titleH}px;top:0;bottom:auto;background:${m.color};border:1px solid ${m.color};border-radius:4px 4px 0 0;cursor:grab;z-index:2">
     ${weekTicksHTML(ml,mw,'rgba(255,255,255,.2)')}
     <span class="mbar-date mbar-start" style="color:rgba(255,255,255,.9)">${m.start.slice(5)}</span>
     <span class="mbar-date mbar-end" style="color:rgba(255,255,255,.9)">${m.end.slice(5)}</span>
@@ -1336,8 +1341,8 @@ function showRotPop(e, pilot, ri){
       <option value="ON"${r.st==='ON'?' selected':''}>ON</option>
       <option value="OFF"${r.st==='OFF'?' selected':''}>OFF</option>
       <option value="WORKOVER"${r.st==='WORKOVER'?' selected':''}>WORKOVER</option>
-      <option value="AVAILABLE_WORKOVER"${r.st==='AVAILABLE_WORKOVER'?' selected':''}>AVAILABLE TO WORK OVER</option>
-      <option value="VACATION_EXTRA"${r.st==='VACATION_EXTRA'?' selected':''}>VACATION EXTRA</option>
+      <option value="AVAILABLE_WORKOVER"${r.st==='AVAILABLE_WORKOVER'?' selected':''}>AVAILABLE</option>
+      <option value="VACATION_EXTRA"${r.st==='VACATION_EXTRA'?' selected':''}>VACATION</option>
     </select>
   `;
   div._rotCtx = {pilot, ri, isNew:false};
@@ -1357,13 +1362,18 @@ function showWorkoverPop(e){
   const div = document.createElement('div');
   div.className='pop';
   div.innerHTML=`
-    <div style="font-weight:700;font-size:12px;margin-bottom:6px">Add Work Over</div>
+    <div style="font-weight:700;font-size:12px;margin-bottom:6px">${adminMode?'Add Work Over':'Add Rotation'}</div>
     <div class="pb" style="margin-bottom:8px">
       <button class="pcancel" onclick="cPop()">Cancel</button>
       <button class="psave" onclick="saveWorkoverPop()">Save</button>
     </div>
     <label>Pilot</label>
     <select id="wo-pilot" style="width:100%">${opts}</select>
+    ${adminMode?'':`<label>Type</label>
+    <select id="wo-type" style="width:100%">
+      <option value="AVAILABLE_WORKOVER">Available</option>
+      <option value="VACATION_EXTRA">Vacation</option>
+    </select>`}
     <label>Start Date</label>
     <input type="date" id="wo-start" value="${ds}">
     <label>End Date</label>
@@ -1381,17 +1391,19 @@ async function saveWorkoverPop(){
   if(!pilotName||!start||!end) return;
   const pilot=PILOTS.find(p=>p.name===pilotName);
   if(!pilot) return;
-  pilot.rot.push({s:start,e:end,st:'WORKOVER'});
+  const typeEl=document.getElementById('wo-type');
+  const rotType=adminMode?'WORKOVER':(typeEl?typeEl.value:'AVAILABLE_WORKOVER');
+  pilot.rot.push({s:start,e:end,st:rotType});
   pilot.rot.sort((a,b)=>a.s.localeCompare(b.s));
   cPop();
   render();
-  // In normal (non-admin) mode, auto-commit the workover to the sheet
+  // In normal (non-admin) mode, auto-commit to the sheet
   if(!adminMode){
     try {
       await commitToAPI();
-      showMessage('✅ Work over saved to Google Sheets!','success');
+      showMessage('✅ Saved to Google Sheets!','success');
     } catch(err){
-      showMessage('❌ Failed to save work over: '+err.message,'error');
+      showMessage('❌ Failed to save: '+err.message,'error');
     }
   }
 }
@@ -1422,8 +1434,8 @@ function showAddRotPop(e, pilotName){
       <option value="ON">ON</option>
       <option value="OFF">OFF</option>
       <option value="WORKOVER" selected>WORKOVER</option>
-      <option value="AVAILABLE_WORKOVER">AVAILABLE TO WORK OVER</option>
-      <option value="VACATION_EXTRA">VACATION EXTRA</option>
+      <option value="AVAILABLE_WORKOVER">AVAILABLE</option>
+      <option value="VACATION_EXTRA">VACATION</option>
     </select>
   `;
   div._rotCtx = {pilot, ri:-1, isNew:true};
