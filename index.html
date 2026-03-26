@@ -175,7 +175,7 @@ body.viewer-mode .abar:hover .ax { display:none; }
   <div class="leg"><div class="lsw" style="background:#F59E0B"></div> Vacation</div>
   <div class="leg"><div class="lsw" style="background:#F472B6"></div> Available</div>
   <div class="leg"><div class="lsw" style="background:var(--yellow)"></div> Cursor</div>
-  <span id="app-version" style="font-size:10px;opacity:.5;cursor:pointer;margin-left:4px;user-select:none">v3.32</span>
+  <span id="app-version" style="font-size:10px;opacity:.5;cursor:pointer;margin-left:4px;user-select:none">v3.33</span>
   <span id="legend-hint" style="margin-left:auto;font-size:10px">Add a note about 'Vacation' or 'Availability' with the + Add Rotation button.</span>
 </div>
 
@@ -625,6 +625,34 @@ function showMessage(message, type = 'info') {
   setTimeout(() => messageDiv.remove(), 2500);
 }
 
+let _savingOverlay = null;
+function showSaving(){
+  if(_savingOverlay) return;
+  const div = document.createElement('div');
+  div.style.cssText = 'position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);z-index:10002;display:flex;flex-direction:column;align-items:center;gap:8px;padding:24px 36px;border-radius:12px;background:rgba(0,0,0,.85);box-shadow:0 4px 24px rgba(0,0,0,.6);';
+  div.innerHTML = `<div style="font-size:32px;animation:heliSpin 1s linear infinite">🚁</div><div style="color:#fff;font-size:13px;font-weight:600">Saving...</div>`;
+  document.body.appendChild(div);
+  _savingOverlay = div;
+  // Add keyframes if not already present
+  if(!document.getElementById('heli-spin-style')){
+    const s=document.createElement('style');s.id='heli-spin-style';
+    s.textContent='@keyframes heliSpin{0%{transform:rotate(0deg)}100%{transform:rotate(360deg)}}';
+    document.head.appendChild(s);
+  }
+}
+function hideSaving(success){
+  if(_savingOverlay){
+    if(success!==undefined){
+      _savingOverlay.innerHTML = success
+        ? `<div style="font-size:32px">✅</div><div style="color:#fff;font-size:13px;font-weight:600">Saved</div>`
+        : `<div style="font-size:32px">❌</div><div style="color:#fff;font-size:13px;font-weight:600">Failed</div>`;
+      setTimeout(()=>{if(_savingOverlay){_savingOverlay.remove();_savingOverlay=null;}}, 1500);
+    } else {
+      _savingOverlay.remove();_savingOverlay=null;
+    }
+  }
+}
+
 // ====== BUTTON HANDLERS ======
 async function commitChanges() {
   if (!isDirty) {
@@ -633,14 +661,14 @@ async function commitChanges() {
   }
   
   const commitBtn = document.getElementById('commitBtn');
-  const originalText = commitBtn.innerHTML;
-  commitBtn.innerHTML = '💾 Saving...';
   commitBtn.disabled = true;
+  showSaving();
   
   try {
     await commitToAPI();
-    showMessage('✅ Saved to Google Sheets!', 'success');
+    hideSaving(true);
   } catch (error) {
+    hideSaving(false);
     showMessage('❌ Failed to save: ' + error.message, 'error');
   } finally {
     commitBtn.disabled = false;
@@ -1411,11 +1439,12 @@ function saveWorkoverPop(){
   pilot.rot.sort((a,b)=>a.s.localeCompare(b.s));
   cPop();
   render();
-  // In normal (non-admin) mode, auto-commit to the sheet (fire and forget)
+  // In normal (non-admin) mode, auto-commit to the sheet
   if(!adminMode){
+    showSaving();
     commitToAPI()
-      .then(()=>showMessage('✅ Saved to Google Sheets!','success'))
-      .catch(err=>showMessage('❌ Failed to save: '+err.message,'error'));
+      .then(()=>hideSaving(true))
+      .catch(err=>{hideSaving(false);showMessage('❌ Failed to save: '+err.message,'error');});
   }
 }
 
@@ -2079,8 +2108,8 @@ function popPos(div,e,avoidEl){
   div.style.top=top+'px';
   div.style.left=left+'px';
 }
-function cPop2(e){if(pop&&!pop.contains(e.target)){cPop();document.removeEventListener('click',cPop2);}}
-function cPop(){if(pop){pop.remove();pop=null;}}
+function cPop2(e){if(pop&&!pop.contains(e.target)){cPop();}}
+function cPop(){if(pop){pop.remove();pop=null;}document.removeEventListener('click',cPop2);}
 function savePop(id){
   const m=MISSIONS.find(mm=>mm.id===id);if(!m) return;
   m.name=document.getElementById('pn').value.trim()||m.name;
