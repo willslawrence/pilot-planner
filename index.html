@@ -175,7 +175,7 @@ body.viewer-mode .abar:hover .ax { display:none; }
   <div class="leg"><div class="lsw" style="background:#F59E0B"></div> Vacation</div>
   <div class="leg"><div class="lsw" style="background:#F472B6"></div> Available</div>
   <div class="leg"><div class="lsw" style="background:var(--yellow)"></div> Cursor</div>
-  <span id="app-version" style="font-size:10px;opacity:.5;cursor:pointer;margin-left:4px;user-select:none">v3.31</span>
+  <span id="app-version" style="font-size:10px;opacity:.5;cursor:pointer;margin-left:4px;user-select:none">v3.32</span>
   <span id="legend-hint" style="margin-left:auto;font-size:10px">Add a note about 'Vacation' or 'Availability' with the + Add Rotation button.</span>
 </div>
 
@@ -1350,6 +1350,8 @@ function showRotPop(e, pilot, ri){
       <option value="AVAILABLE_WORKOVER"${r.st==='AVAILABLE_WORKOVER'?' selected':''}>AVAILABLE</option>
       <option value="VACATION_EXTRA"${r.st==='VACATION_EXTRA'?' selected':''}>VACATION</option>
     </select>
+    <label>Note</label>
+    <input type="text" id="rot-note" value="${(r.note||'').replace(/"/g,'&quot;')}" placeholder="Optional note">
   `;
   div._rotCtx = {pilot, ri, isNew:false};
   document.body.appendChild(div);
@@ -1460,15 +1462,21 @@ function saveRotPop(){
   const newStart = document.getElementById('rot-start').value;
   const newEnd = document.getElementById('rot-end').value;
   const newStatus = document.getElementById('rot-status').value;
+  const noteEl = document.getElementById('rot-note');
+  const newNote = noteEl ? noteEl.value.trim() : '';
   if(!newStart||!newEnd){alert('Set both dates');return;}
   if(newEnd<newStart){alert('End must be after start');return;}
   if(isNew){
-    pilot.rot.push({s:newStart, e:newEnd, st:newStatus});
+    const rot = {s:newStart, e:newEnd, st:newStatus};
+    if(newNote) rot.note = newNote;
+    pilot.rot.push(rot);
     pilot.rot.sort((a,b)=>a.s.localeCompare(b.s));
   } else {
     pilot.rot[ri].s = newStart;
     pilot.rot[ri].e = newEnd;
     pilot.rot[ri].st = newStatus;
+    if(newNote) pilot.rot[ri].note = newNote;
+    else delete pilot.rot[ri].note;
   }
   cPop();updateDirtyState();render();
 }
