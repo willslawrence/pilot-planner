@@ -175,8 +175,8 @@ body.viewer-mode .abar:hover .ax { display:none; }
   <div class="leg"><div class="lsw" style="background:#F59E0B"></div> Vacation</div>
   <div class="leg"><div class="lsw" style="background:#F472B6"></div> Available</div>
   <div class="leg"><div class="lsw" style="background:var(--yellow)"></div> Cursor</div>
-  <span id="app-version" style="font-size:10px;opacity:.5;cursor:pointer;margin-left:4px;user-select:none">v3.29</span>
-  <span style="margin-left:auto;font-size:10px">Drag pilot → heli slot · Click mission label to edit · Click rotation bar to edit</span>
+  <span id="app-version" style="font-size:10px;opacity:.5;cursor:pointer;margin-left:4px;user-select:none">v3.30</span>
+  <span id="legend-hint" style="margin-left:auto;font-size:10px">Add a note about 'Vacation' or 'Availability' with the + Add Rotation button.</span>
 </div>
 
 <script>
@@ -243,6 +243,9 @@ function applyAdminMode(){
   // Button label
   const addRotBtn=document.getElementById('addRotBtn');
   if(addRotBtn) addRotBtn.textContent=adminMode?'+ Work Over':'+ Add Rotation';
+  // Legend hint text
+  const legendHint=document.getElementById('legend-hint');
+  if(legendHint) legendHint.textContent=adminMode?'Drag pilot → heli slot · Click mission label to edit · Click rotation bar to edit':"Add a note about 'Vacation' or 'Availability' with the + Add Rotation button.";
   // Assignment blocks: only editable in admin
   document.querySelectorAll('.pa-block').forEach(blk=>{
     blk.style.cursor=adminMode?'pointer':'default';
@@ -276,7 +279,8 @@ async function fetchFromAPI() {
       start: parseDateFromISO(rotation.Start),
       end: parseDateFromISO(rotation.End),
       fleetplanID: rotation.FleetplanID,
-      lastSynced: rotation.LastSynced
+      lastSynced: rotation.LastSynced,
+      note: rotation.Note || ''
     }));
     
     // Convert rotations to the pilot rot format
@@ -419,7 +423,8 @@ async function commitToAPI() {
           `${r.s}T00:00:00.000Z`,
           `${r.e}T00:00:00.000Z`,
           p.fleetplanId || '',
-          timestamp
+          timestamp,
+          r.note || ''
         ]);
       }
     }
@@ -469,11 +474,11 @@ function buildRotationsForPilot(pilotName, rotations) {
   
   if (hasExplicitBlocks) {
     // Sheet has full rotation data — use as-is
-    return pilotRotations.map(r => ({
-      s: r.start,
-      e: r.end,
-      st: r.type
-    })).sort((a, b) => a.s.localeCompare(b.s));
+    return pilotRotations.map(r => {
+      const rot = { s: r.start, e: r.end, st: r.type };
+      if(r.note) rot.note = r.note;
+      return rot;
+    }).sort((a, b) => a.s.localeCompare(b.s));
   }
   
   // Fallback: only OFF/VACATION entries (from Fleetplan import) — fill gaps with ON
@@ -1250,7 +1255,8 @@ function pilotRow(p,td,ds){
       const blkCls = r.st==='WORKOVER' ? 'duty-blk workover' : r.st==='VACATION_EXTRA' ? 'duty-blk vacation-extra' : r.st==='AVAILABLE_WORKOVER' ? 'duty-blk available-workover' : 'duty-blk on';
       const bgColor = r.st==='WORKOVER' ? '#42A5F5' : r.st==='VACATION_EXTRA' ? '#F59E0B' : r.st==='AVAILABLE_WORKOVER' ? '#F472B6' : '#10B981';
       const label = weekLabel;
-      bars+=`<div class="${blkCls}" data-pilot="${p.name}" data-ri="${ri}" style="left:${rl}px;width:${rw}px;background:${bgColor}">
+      const rotTip=r.note?`${p.name} — ${r.st.replace('_',' ')}\n${r.note}`.replace(/"/g,'&quot;'):'';
+      bars+=`<div class="${blkCls}" data-pilot="${p.name}" data-ri="${ri}" ${rotTip?`title="${rotTip}"`:''} style="left:${rl}px;width:${rw}px;background:${bgColor}">
         ${weekTicksHTML(rl,rw,'rgba(255,255,255,.2)')}
         <span class="rot-date rot-start">${sLabel}</span>
         <span class="${centerCls}">${label}</span>
@@ -1378,6 +1384,8 @@ function showWorkoverPop(e){
     <input type="date" id="wo-start" value="${ds}">
     <label>End Date</label>
     <input type="date" id="wo-end" value="${de}">
+    ${adminMode?'':`<label>Note (optional)</label>
+    <input type="text" id="wo-note" placeholder="e.g. Family visit, available for survey" style="width:100%">`}
   `;
   document.body.appendChild(div);
   pop=div;
@@ -1392,8 +1400,12 @@ async function saveWorkoverPop(){
   const pilot=PILOTS.find(p=>p.name===pilotName);
   if(!pilot) return;
   const typeEl=document.getElementById('wo-type');
+  const noteEl=document.getElementById('wo-note');
   const rotType=adminMode?'WORKOVER':(typeEl?typeEl.value:'AVAILABLE_WORKOVER');
-  pilot.rot.push({s:start,e:end,st:rotType});
+  const note=noteEl?noteEl.value.trim():'';
+  const rot={s:start,e:end,st:rotType};
+  if(note) rot.note=note;
+  pilot.rot.push(rot);
   pilot.rot.sort((a,b)=>a.s.localeCompare(b.s));
   cPop();
   render();
