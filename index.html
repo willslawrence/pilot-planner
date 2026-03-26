@@ -175,7 +175,7 @@ body.viewer-mode .abar:hover .ax { display:none; }
   <div class="leg"><div class="lsw" style="background:#F59E0B"></div> Vacation</div>
   <div class="leg"><div class="lsw" style="background:#F472B6"></div> Available</div>
   <div class="leg"><div class="lsw" style="background:var(--yellow)"></div> Cursor</div>
-  <span id="app-version" style="font-size:10px;opacity:.5;cursor:pointer;margin-left:4px;user-select:none">v3.30</span>
+  <span id="app-version" style="font-size:10px;opacity:.5;cursor:pointer;margin-left:4px;user-select:none">v3.31</span>
   <span id="legend-hint" style="margin-left:auto;font-size:10px">Add a note about 'Vacation' or 'Availability' with the + Add Rotation button.</span>
 </div>
 
@@ -1392,7 +1392,7 @@ function showWorkoverPop(e){
   popPos(div,e);
   setTimeout(()=>document.addEventListener('click',cPop2),10);
 }
-async function saveWorkoverPop(){
+function saveWorkoverPop(){
   const pilotName=document.getElementById('wo-pilot').value;
   const start=document.getElementById('wo-start').value;
   const end=document.getElementById('wo-end').value;
@@ -1409,14 +1409,11 @@ async function saveWorkoverPop(){
   pilot.rot.sort((a,b)=>a.s.localeCompare(b.s));
   cPop();
   render();
-  // In normal (non-admin) mode, auto-commit to the sheet
+  // In normal (non-admin) mode, auto-commit to the sheet (fire and forget)
   if(!adminMode){
-    try {
-      await commitToAPI();
-      showMessage('✅ Saved to Google Sheets!','success');
-    } catch(err){
-      showMessage('❌ Failed to save: '+err.message,'error');
-    }
+    commitToAPI()
+      .then(()=>showMessage('✅ Saved to Google Sheets!','success'))
+      .catch(err=>showMessage('❌ Failed to save: '+err.message,'error'));
   }
 }
 
