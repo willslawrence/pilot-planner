@@ -175,7 +175,7 @@ body.viewer-mode .abar:hover .ax { display:none; }
   <div class="leg"><div class="lsw" style="background:#F59E0B"></div> Vacation</div>
   <div class="leg"><div class="lsw" style="background:#F472B6"></div> Available</div>
   <div class="leg"><div class="lsw" style="background:var(--yellow)"></div> Cursor</div>
-  <span id="app-version" style="font-size:10px;opacity:.5;cursor:pointer;margin-left:4px;user-select:none">v3.33</span>
+  <span id="app-version" style="font-size:10px;opacity:.5;cursor:pointer;margin-left:4px;user-select:none">v3.34</span>
   <span id="legend-hint" style="margin-left:auto;font-size:10px">Add a note about 'Vacation' or 'Availability' with the + Add Rotation button.</span>
 </div>
 
@@ -338,6 +338,30 @@ async function fetchFromAPI() {
       });
     });
     
+    // Clean up orphaned assignments (outside mission date range)
+    let orphansRemoved = 0;
+    for (const key of Object.keys(apiAssignments)) {
+      const [missionID] = key.split('_');
+      const mission = MISSIONS.find(m => String(m.id) === String(missionID));
+      if (!mission) {
+        // Mission no longer exists — remove all its assignments
+        orphansRemoved += apiAssignments[key].length;
+        delete apiAssignments[key];
+        continue;
+      }
+      const mStart = mission.start, mEnd = mission.end;
+      const before = apiAssignments[key].length;
+      apiAssignments[key] = apiAssignments[key].filter(a => {
+        // Keep if assignment overlaps with mission dates at all
+        return a.end >= mStart && a.start <= mEnd;
+      });
+      orphansRemoved += before - apiAssignments[key].length;
+      if (apiAssignments[key].length === 0) delete apiAssignments[key];
+    }
+    if (orphansRemoved > 0) {
+      console.log(`Auto-cleaned ${orphansRemoved} orphaned assignment(s) outside mission dates`);
+    }
+
     // Store original state for dirty checking
     ORIGINAL_ASSIGNMENTS = JSON.parse(JSON.stringify(apiAssignments));
     ORIGINAL_MISSIONS = JSON.parse(JSON.stringify(MISSIONS));
@@ -1625,7 +1649,8 @@ function setupPilotRowClicks(){
       e.stopPropagation();
       if(!adminMode) return;
       const pilot=blk.dataset.paPilot;
-      const mid=parseInt(blk.dataset.paMid);
+      const midRaw=blk.dataset.paMid;
+      const mid=isNaN(midRaw)?midRaw:parseInt(midRaw);
       const hi=parseInt(blk.dataset.paHi);
       const start=blk.dataset.paStart;
       const end=blk.dataset.paEnd;
