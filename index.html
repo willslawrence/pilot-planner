@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Pilot Availability Planner v3.38 — THC H125</title>
+<title>Pilot Availability Planner v3.39 — THC H125</title>
 <style>
 :root {
   --bg: #0f1123;
@@ -122,6 +122,7 @@ body.simulate-mode .sim-banner { display:block; }
 
 .pa-block { position:absolute; top:7px; height:13px; border-radius:3px; display:flex; align-items:center; padding:0 4px; font-size:7px; font-weight:700; color:#fff; z-index:3; overflow:hidden; white-space:nowrap; text-overflow:ellipsis; border:1px solid rgba(255,255,255,.25); cursor:pointer; letter-spacing:.3px; }
 body.hide-coverage .pa-block { display:none!important; }
+body.hide-available .duty-blk.available-workover { display:none!important; }
 
 .week-shade { position:absolute; top:0; bottom:0; background:var(--week-shade); pointer-events:none; z-index:0; }
 .sun-border { position:absolute; top:0; bottom:0; width:2px; background:var(--sun-border-color); pointer-events:none; z-index:1; }
@@ -160,6 +161,7 @@ body.hide-coverage .pa-block { display:none!important; }
     <button onclick="showWorkoverPop(event)" title="Add a rotation for a pilot" id="addRotBtn">+ Work Over</button>
     <button id="simBtn" onclick="toggleSimulate()" title="Simulate pilot coverage without saving to sheet">🎮 Simulate</button>
     <button id="covBtn" onclick="toggleCoverage()" title="Toggle mission coverage on pilot rows">👁 Coverage</button>
+    <button id="availBtn" onclick="toggleAvailable()" title="Toggle available rotation bars">👁 Available</button>
     <button class="theme-btn" onclick="toggleTheme()" id="themeBtn" title="Toggle light/dark theme">🌙</button>
     <button onclick="goToday()">Today</button>
     <button id="commitBtn" onclick="commitChanges()" title="Save changes to Google Sheets" style="position:relative;">💾 Commit</button>
@@ -182,7 +184,7 @@ body.hide-coverage .pa-block { display:none!important; }
   <div class="leg"><div class="lsw" style="background:#F59E0B"></div> Vacation</div>
   <div class="leg"><div class="lsw" style="background:#F472B6"></div> Available</div>
   <div class="leg"><div class="lsw" style="background:var(--yellow)"></div> Cursor</div>
-  <span id="app-version" style="font-size:10px;opacity:.5;cursor:pointer;margin-left:4px;user-select:none">v3.38</span>
+  <span id="app-version" style="font-size:10px;opacity:.5;cursor:pointer;margin-left:4px;user-select:none">v3.39</span>
   <span id="legend-hint" style="margin-left:auto;font-size:10px">Add a note about 'Vacation' or 'Availability' with the + Add Rotation button.</span>
 </div>
 
@@ -266,6 +268,14 @@ function applyModes(){
   document.getElementById('simBtn')?.classList.toggle('active', simulateMode);
 }
 function applyAdminMode(){ applyModes(); }
+
+function toggleAvailable(){
+  document.body.classList.toggle('hide-available');
+  const hidden=document.body.classList.contains('hide-available');
+  const btn=document.getElementById('availBtn');
+  if(btn) btn.style.opacity=hidden?'.5':'1';
+  showMessage(hidden?'👁 Available bars hidden':'👁 Available bars visible','info');
+}
 
 function toggleCoverage(){
   document.body.classList.toggle('hide-coverage');
