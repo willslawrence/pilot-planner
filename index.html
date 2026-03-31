@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Pilot Availability Planner v3.20 — THC H125</title>
+<title>Pilot Availability Planner v3.35 — THC H125</title>
 <style>
 :root {
   --bg: #0f1123;
@@ -88,6 +88,9 @@ html.light .h-row { background:#fff; }
 .abar .ax { position:absolute; right:-8px; top:-8px; width:16px; height:16px; background:var(--red); color:#fff; border-radius:50%; display:none; align-items:center; justify-content:center; font-size:10px; line-height:1; cursor:pointer; border:2px solid var(--bg); }
 .abar:hover .ax { display:flex; }
 body.viewer-mode .abar:hover .ax { display:none; }
+.sim-banner { display:none; background:linear-gradient(90deg,#009688,#00796B); color:#fff; text-align:center; font-size:11px; font-weight:600; padding:3px 0; letter-spacing:.5px; }
+body.simulate-mode .sim-banner { display:block; }
+#simBtn.active { background:var(--teal); color:#fff; border-color:var(--teal); }
 .abar-grip { position:absolute; top:0; bottom:0; width:6px; cursor:ew-resize; z-index:4; }
 .abar-grip-l { left:-2px; border-radius:4px 0 0 4px; }
 .abar-grip-r { right:-2px; border-radius:0 4px 4px 0; }
@@ -154,6 +157,7 @@ body.viewer-mode .abar:hover .ax { display:none; }
   <h1>🚁 Pilot Availability Planner</h1>
   <div class="ctrls">
     <button onclick="showWorkoverPop(event)" title="Add a rotation for a pilot" id="addRotBtn">+ Work Over</button>
+    <button id="simBtn" onclick="toggleSimulate()" title="Simulate pilot coverage without saving to sheet">🎮 Simulate</button>
     <button class="theme-btn" onclick="toggleTheme()" id="themeBtn" title="Toggle light/dark theme">🌙</button>
     <button onclick="goToday()">Today</button>
     <button id="commitBtn" onclick="commitChanges()" title="Save changes to Google Sheets" style="position:relative;">💾 Commit</button>
@@ -161,6 +165,7 @@ body.viewer-mode .abar:hover .ax { display:none; }
   </div>
 </div>
 
+<div class="sim-banner" id="simBanner">🎮 SIMULATION MODE — changes are local only</div>
 <div class="main-scroll" id="mscroll">
   <div class="main-inner" id="mpanel"></div>
 </div>
@@ -175,7 +180,7 @@ body.viewer-mode .abar:hover .ax { display:none; }
   <div class="leg"><div class="lsw" style="background:#F59E0B"></div> Vacation</div>
   <div class="leg"><div class="lsw" style="background:#F472B6"></div> Available</div>
   <div class="leg"><div class="lsw" style="background:var(--yellow)"></div> Cursor</div>
-  <span id="app-version" style="font-size:10px;opacity:.5;cursor:pointer;margin-left:4px;user-select:none">v3.34</span>
+  <span id="app-version" style="font-size:10px;opacity:.5;cursor:pointer;margin-left:4px;user-select:none">v3.35</span>
   <span id="legend-hint" style="margin-left:auto;font-size:10px">Add a note about 'Vacation' or 'Availability' with the + Add Rotation button.</span>
 </div>
 
@@ -196,6 +201,8 @@ let isDirty = false;
 
 // ====== ADMIN MODE ======
 let adminMode = false;
+let simulateMode = false;
+function canEditAssignments(){ return adminMode || simulateMode; }
 let versionClickCount = 0;
 let versionClickTimer = null;
 
@@ -210,46 +217,59 @@ function initAdminToggle(){
     if(versionClickCount>=3){
       versionClickCount=0;
       adminMode=!adminMode;
-      applyAdminMode();
+      if(adminMode) simulateMode=false;
+      applyModes();
       showMessage(adminMode?'🔓 Admin mode ON':'🔒 Admin mode OFF','info');
     }
   });
 }
 
-function applyAdminMode(){
+function applyModes(){
+  const canEdit=canEditAssignments();
   // Body class for CSS overrides
-  document.body.classList.toggle('viewer-mode', !adminMode);
+  document.body.classList.toggle('viewer-mode', !adminMode && !simulateMode);
+  document.body.classList.toggle('simulate-mode', simulateMode);
   // Commit & Reset buttons
   const commitBtn=document.getElementById('commitBtn');
   const resetBtns=document.querySelectorAll('.ctrls button');
   if(commitBtn) commitBtn.style.display=adminMode?'':'none';
   resetBtns.forEach(b=>{if(b.textContent.includes('🗑️')) b.style.display=adminMode?'':'none';});
-  // Add Mission & Add Pilot buttons
+  // Add Mission & Add Pilot buttons — admin only
   document.querySelectorAll('.add-btn').forEach(el=>el.style.display=adminMode?'':'none');
-  // Pilot row "+" rotation add buttons
-  document.querySelectorAll('.rot-add-btn').forEach(el=>el.style.display=adminMode?'':'none');
+  // Pilot row "+" rotation add buttons — admin or simulate
+  document.querySelectorAll('.rot-add-btn').forEach(el=>el.style.display=canEdit?'':'none');
   // Rotation bars: clickable only in admin mode
   document.querySelectorAll('.duty-blk').forEach(blk=>{
     blk.style.cursor=adminMode?'pointer':'default';
   });
-  // Pilot rows: draggable only in admin mode
+  // Pilot rows: draggable in admin or simulate
   document.querySelectorAll('.p-row').forEach(row=>{
-    row.setAttribute('draggable', adminMode?'true':'false');
-    row.style.cursor=adminMode?'grab':'default';
+    row.setAttribute('draggable', canEdit?'true':'false');
+    row.style.cursor=canEdit?'grab':'default';
   });
-  // Version badge color hint (gold = admin)
+  // Version badge color hint (gold = admin, teal = simulate)
   const vEl=document.getElementById('app-version');
-  if(vEl) vEl.style.color=adminMode?'#F59E0B':'';
+  if(vEl) vEl.style.color=adminMode?'#F59E0B':(simulateMode?'#009688':'');
   // Button label
   const addRotBtn=document.getElementById('addRotBtn');
   if(addRotBtn) addRotBtn.textContent=adminMode?'+ Work Over':'+ Add Rotation';
   // Legend hint text
   const legendHint=document.getElementById('legend-hint');
-  if(legendHint) legendHint.textContent=adminMode?'Drag pilot → heli slot · Click mission label to edit · Click rotation bar to edit':"Add a note about 'Vacation' or 'Availability' with the + Add Rotation button.";
-  // Assignment blocks: only editable in admin
+  if(legendHint) legendHint.textContent=adminMode?'Drag pilot → heli slot · Click mission label to edit · Click rotation bar to edit':(simulateMode?'🎮 Drag pilot → heli slot to simulate coverage (changes won\'t save)':"Add a note about 'Vacation' or 'Availability' with the + Add Rotation button.");
+  // Assignment blocks: editable in admin or simulate
   document.querySelectorAll('.pa-block').forEach(blk=>{
-    blk.style.cursor=adminMode?'pointer':'default';
+    blk.style.cursor=canEdit?'pointer':'default';
   });
+  // Simulate button highlight
+  document.getElementById('simBtn')?.classList.toggle('active', simulateMode);
+}
+function applyAdminMode(){ applyModes(); }
+
+function toggleSimulate(){
+  simulateMode=!simulateMode;
+  if(simulateMode) adminMode=false;
+  applyModes();
+  showMessage(simulateMode?'🎮 Simulation mode ON — changes are local only':'🎮 Simulation mode OFF','info');
 }
 
 // ====== API FUNCTIONS ======
@@ -1463,8 +1483,8 @@ function saveWorkoverPop(){
   pilot.rot.sort((a,b)=>a.s.localeCompare(b.s));
   cPop();
   render();
-  // In normal (non-admin) mode, auto-commit to the sheet
-  if(!adminMode){
+  // In normal (non-admin, non-simulate) mode, auto-commit to the sheet
+  if(!adminMode && !simulateMode){
     showSaving();
     commitToAPI()
       .then(()=>hideSaving(true))
@@ -1630,7 +1650,7 @@ function setupAssignmentClicks(){
     bar.addEventListener('click',e=>{
       if(e.target.closest('.ax')) return;
       e.stopPropagation();
-      if(!adminMode) return;
+      if(!canEditAssignments()) return;
       const mid=bar.dataset.amid;
       const hi=parseInt(bar.dataset.ahi);
       const pilot=bar.dataset.apilot;
@@ -1644,10 +1664,10 @@ function setupAssignmentClicks(){
 function setupPilotRowClicks(){
   document.querySelectorAll('.pa-block[data-pa-pilot]').forEach(blk=>{
     blk.style.pointerEvents='auto';
-    blk.style.cursor=adminMode?'pointer':'default';
+    blk.style.cursor=canEditAssignments()?'pointer':'default';
     blk.addEventListener('click',e=>{
       e.stopPropagation();
-      if(!adminMode) return;
+      if(!canEditAssignments()) return;
       const pilot=blk.dataset.paPilot;
       const midRaw=blk.dataset.paMid;
       const mid=isNaN(midRaw)?midRaw:parseInt(midRaw);
@@ -1840,7 +1860,7 @@ function setupAssignmentResize(){
   // Resize grips (mouse + touch)
   document.querySelectorAll('.abar-grip').forEach(grip=>{
     function startResize(e){
-      if(!adminMode) return;
+      if(!canEditAssignments()) return;
       e.preventDefault();e.stopPropagation();
       const isTouch=e.type==='touchstart';
       const edge=grip.dataset.edge;
@@ -2020,11 +2040,11 @@ function setupDrops(){
     const mid=zone.dataset.mid,hi=parseInt(zone.dataset.hi);
     zone.addEventListener('dragover',e=>{e.preventDefault();e.stopPropagation();zone.style.background='rgba(76,175,80,.12)';});
     zone.addEventListener('dragleave',e=>{zone.style.background='';});
-    zone.addEventListener('drop',e=>{e.stopPropagation();zone.style.background='';if(!adminMode) return;handleDrop(e,mid,hi);});
+    zone.addEventListener('drop',e=>{e.stopPropagation();zone.style.background='';if(!canEditAssignments()) return;handleDrop(e,mid,hi);});
     // Tap-to-assign for mobile (click on empty heli lane)
     zone.addEventListener('click',e=>{
       if(e.target.closest('.abar')) return; // don't trigger on existing bars
-      if(!adminMode) return;
+      if(!canEditAssignments()) return;
       e.stopPropagation();
       const m=MISSIONS.find(mm=>mm.id===mid);if(!m) return;
       const wrap=document.getElementById('content-wrap');
@@ -2335,7 +2355,10 @@ async function initApp() {
     hideLoading();
     render();
     initAdminToggle();
-    applyAdminMode(); // default: normal mode (adminMode=false)
+    // URL param: ?mode=simulate
+    const urlParams=new URLSearchParams(window.location.search);
+    if(urlParams.get('mode')==='simulate') simulateMode=true;
+    applyModes(); // apply initial mode state
     setTimeout(scr, 50);
   }
 }
