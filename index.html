@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Pilot Availability Planner v3.39 — THC H125</title>
+<title>Pilot Availability Planner v3.40 — THC H125</title>
 <style>
 :root {
   --bg: #0f1123;
@@ -115,13 +115,14 @@ body.simulate-mode .sim-banner { display:block; }
 .rot-center { position:absolute; left:50%; top:50%; transform:translate(-50%,-50%); font-size:11px; font-weight:700; color:#fff; text-shadow:0 1px 2px rgba(0,0,0,.5); }
 .rot-center.warn { color:#ff4444; font-size:10px; text-shadow:0 0 4px rgba(255,0,0,.5); }
 .duty-blk.on { opacity:.55; }
-.duty-blk.off { background:#F87171; opacity:.22; }
+.duty-blk.off { opacity:.22; }
 .duty-blk.workover { opacity:.55; background-image:repeating-linear-gradient(45deg,transparent,transparent 4px,rgba(66,165,245,.4) 4px,rgba(66,165,245,.4) 8px); }
-.duty-blk.vacation-extra { opacity:.55; background:#F59E0B; background-image:repeating-linear-gradient(45deg,transparent,transparent 4px,rgba(255,255,255,.15) 4px,rgba(255,255,255,.15) 8px); }
-.duty-blk.available-workover { opacity:.55; background:#F472B6; background-image:repeating-linear-gradient(45deg,transparent,transparent 4px,rgba(255,255,255,.15) 4px,rgba(255,255,255,.15) 8px); }
+.duty-blk.vacation-extra { opacity:.55; background-image:repeating-linear-gradient(45deg,transparent,transparent 4px,rgba(255,255,255,.15) 4px,rgba(255,255,255,.15) 8px); }
+.duty-blk.available-workover { opacity:.55; background-image:repeating-linear-gradient(45deg,transparent,transparent 4px,rgba(255,255,255,.15) 4px,rgba(255,255,255,.15) 8px); }
 
 .pa-block { position:absolute; top:7px; height:13px; border-radius:3px; display:flex; align-items:center; padding:0 4px; font-size:7px; font-weight:700; color:#fff; z-index:3; overflow:hidden; white-space:nowrap; text-overflow:ellipsis; border:1px solid rgba(255,255,255,.25); cursor:pointer; letter-spacing:.3px; }
 body.hide-coverage .pa-block { display:none!important; }
+body.hide-coverage .handoff-svg { display:none!important; }
 body.hide-available .duty-blk.available-workover { display:none!important; }
 
 .week-shade { position:absolute; top:0; bottom:0; background:var(--week-shade); pointer-events:none; z-index:0; }
@@ -180,11 +181,13 @@ body.hide-available .duty-blk.available-workover { display:none!important; }
   <div class="leg"><input type="color" id="cc-survey" style="width:14px;height:14px;border:none;padding:0;cursor:pointer;border-radius:2px" onchange="PILOT_COLORS.survey=this.value;savePilotColors();render()"> Survey</div>
   <div class="leg"><input type="color" id="cc-mg" style="width:14px;height:14px;border:none;padding:0;cursor:pointer;border-radius:2px" onchange="PILOT_COLORS.mg=this.value;savePilotColors();render()"> Management</div>
   <div class="leg"><div class="lsw" style="background:var(--red)"></div> Rally</div>
-  <div class="leg"><div class="lsw" style="background:var(--gray)"></div> Off Rotation</div>
-  <div class="leg"><div class="lsw" style="background:#F59E0B"></div> Vacation</div>
-  <div class="leg"><div class="lsw" style="background:#F472B6"></div> Available</div>
+  <div class="leg"><input type="color" id="cc-on" style="width:14px;height:14px;border:none;padding:0;cursor:pointer;border-radius:2px" onchange="ROT_COLORS.on=this.value;saveRotColors();render()"> On</div>
+  <div class="leg"><input type="color" id="cc-off" style="width:14px;height:14px;border:none;padding:0;cursor:pointer;border-radius:2px" onchange="ROT_COLORS.off=this.value;saveRotColors();render()"> Off</div>
+  <div class="leg"><input type="color" id="cc-workover" style="width:14px;height:14px;border:none;padding:0;cursor:pointer;border-radius:2px" onchange="ROT_COLORS.workover=this.value;saveRotColors();render()"> Work Over</div>
+  <div class="leg"><input type="color" id="cc-vacation" style="width:14px;height:14px;border:none;padding:0;cursor:pointer;border-radius:2px" onchange="ROT_COLORS.vacation=this.value;saveRotColors();render()"> Vacation</div>
+  <div class="leg"><input type="color" id="cc-available" style="width:14px;height:14px;border:none;padding:0;cursor:pointer;border-radius:2px" onchange="ROT_COLORS.available=this.value;saveRotColors();render()"> Available</div>
   <div class="leg"><div class="lsw" style="background:var(--yellow)"></div> Cursor</div>
-  <span id="app-version" style="font-size:10px;opacity:.5;cursor:pointer;margin-left:4px;user-select:none">v3.39</span>
+  <span id="app-version" style="font-size:10px;opacity:.5;cursor:pointer;margin-left:4px;user-select:none">v3.40</span>
   <span id="legend-hint" style="margin-left:auto;font-size:10px">Add a note about 'Vacation' or 'Availability' with the + Add Rotation button.</span>
 </div>
 
@@ -865,6 +868,9 @@ function pg(p){if(p.mg) return 'mg';const cats=p.quals.join(' ');const u=cats.in
 const PILOT_COLORS=JSON.parse(localStorage.getItem('pp_pilotColors')||'null')||{uam:'#87CEEB',both:'#1a3a6b',survey:'#FF8C00',mg:'#9CA3AF'};
 function gc(g){return PILOT_COLORS[g]||'#888';}
 function savePilotColors(){localStorage.setItem('pp_pilotColors',JSON.stringify(PILOT_COLORS));}
+const ROT_COLORS=JSON.parse(localStorage.getItem('pp_rotColors')||'null')||{on:'#10B981',off:'#F87171',workover:'#42A5F5',vacation:'#F59E0B',available:'#F472B6'};
+function rotColor(st){return st==='WORKOVER'?ROT_COLORS.workover:st==='VACATION_EXTRA'?ROT_COLORS.vacation:st==='AVAILABLE_WORKOVER'?ROT_COLORS.available:ROT_COLORS.on;}
+function saveRotColors(){localStorage.setItem('pp_rotColors',JSON.stringify(ROT_COLORS));}
 
 function sk(m,h){return m+'_'+h;}
 function gA(m,h){return asgn[sk(m,h)]||[];}
@@ -1131,6 +1137,11 @@ function render(){
   const ccu=document.getElementById('cc-uam'),ccb=document.getElementById('cc-both'),ccs=document.getElementById('cc-survey');
   if(ccu)ccu.value=PILOT_COLORS.uam;if(ccb)ccb.value=PILOT_COLORS.both;if(ccs)ccs.value=PILOT_COLORS.survey;
   const ccm=document.getElementById('cc-mg');if(ccm)ccm.value=PILOT_COLORS.mg||'#9CA3AF';
+  const ccOn=document.getElementById('cc-on');if(ccOn)ccOn.value=ROT_COLORS.on;
+  const ccOff=document.getElementById('cc-off');if(ccOff)ccOff.value=ROT_COLORS.off;
+  const ccWo=document.getElementById('cc-workover');if(ccWo)ccWo.value=ROT_COLORS.workover;
+  const ccVac=document.getElementById('cc-vacation');if(ccVac)ccVac.value=ROT_COLORS.vacation;
+  const ccAvail=document.getElementById('cc-available');if(ccAvail)ccAvail.value=ROT_COLORS.available;
   saveData();
   setupCursor();
   setupDrops();
@@ -1345,7 +1356,7 @@ function pilotRow(p,td,ds){
       const weekLabel = isStandard ? '6W' : (remDays===0 ? fullWeeks+'W' : fullWeeks+'W+'+remDays+'D');
       const centerCls = isStandard ? 'rot-center' : 'rot-center warn';
       const blkCls = r.st==='WORKOVER' ? 'duty-blk workover' : r.st==='VACATION_EXTRA' ? 'duty-blk vacation-extra' : r.st==='AVAILABLE_WORKOVER' ? 'duty-blk available-workover' : 'duty-blk on';
-      const bgColor = r.st==='WORKOVER' ? '#42A5F5' : r.st==='VACATION_EXTRA' ? '#F59E0B' : r.st==='AVAILABLE_WORKOVER' ? '#F472B6' : '#10B981';
+      const bgColor = rotColor(r.st);
       const label = weekLabel;
       const rotTip=r.note?`${p.name} — ${r.st.replace('_',' ')}\n${r.note}`.replace(/"/g,'&quot;'):'';
       bars+=`<div class="${blkCls}" data-pilot="${p.name}" data-ri="${ri}" ${rotTip?`title="${rotTip}"`:''} style="left:${rl}px;width:${rw}px;background:${bgColor}">
@@ -1355,7 +1366,7 @@ function pilotRow(p,td,ds){
         <span class="rot-date rot-end">${eLabel}</span>
       </div>`;
     } else {
-      bars+=`<div class="duty-blk off" data-pilot="${p.name}" data-ri="${ri}" style="left:${rl}px;width:${rw}px"></div>`;
+      bars+=`<div class="duty-blk off" data-pilot="${p.name}" data-ri="${ri}" style="left:${rl}px;width:${rw}px;background:${ROT_COLORS.off}"></div>`;
     }
   }
   // Pilot assignment blocks on pilot row
@@ -1394,7 +1405,7 @@ function pilotRow(p,td,ds){
   }
   const daysOnLabel=`<span style="position:absolute;right:4px;top:50%;transform:translateY(-50%);font-size:9px;font-weight:700;color:var(--muted);z-index:5;background:var(--bg);padding:0 3px;border-radius:2px">${daysOnCount}d</span>`;
   const catColor=gc(g);
-  const labelStyle=on?`background:#10B981;border-left:3px solid #059669;color:#fff;font-weight:700`:`background:var(--surface);border-left:3px solid ${catColor};color:${catColor};font-weight:400;opacity:.85`;
+  const labelStyle=on?`background:${ROT_COLORS.on};border-left:3px solid ${ROT_COLORS.on};color:#fff;font-weight:700`:`background:var(--surface);border-left:3px solid ${catColor};color:${catColor};font-weight:400;opacity:.85`;
   const safePN=p.name.replace(/'/g,"\\'");
   return `<div class="row p-row" draggable="true" data-pilot="${p.name}" data-group="${g}"><div class="rlabel" style="${labelStyle}"><span style="flex:1;overflow:hidden;text-overflow:ellipsis">${p.name}</span><span class="rot-add-btn" onclick="event.stopPropagation();showAddRotPop(event,'${safePN}')" title="Add rotation" style="cursor:pointer;font-size:13px;opacity:.6;margin-left:4px;flex-shrink:0">+</span></div><div class="rbars" style="width:${td*DW}px;height:21px">${bars}${daysOnLabel}</div></div>`;
 }
@@ -1797,8 +1808,8 @@ function setupHoverCursor(){
       if(!lbl) return;
       const on=isOn(p,dateStr);
       if(on){
-        lbl.style.background='#10B981';
-        lbl.style.borderLeft='3px solid #059669';
+        lbl.style.background=ROT_COLORS.on;
+        lbl.style.borderLeft='3px solid '+ROT_COLORS.on;
         lbl.style.color='#fff';
         lbl.style.fontWeight='700';
         lbl.style.opacity='1';
