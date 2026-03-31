@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Pilot Availability Planner v3.40 — THC H125</title>
+<title>Pilot Availability Planner v3.41 — THC H125</title>
 <style>
 :root {
   --bg: #0f1123;
@@ -139,6 +139,13 @@ body.hide-available .duty-blk.available-workover { display:none!important; }
 .leg { display:flex; align-items:center; gap:3px; }
 .lsw { width:14px; height:8px; border-radius:2px; }
 
+.toggle { display:flex; align-items:center; gap:4px; cursor:pointer; user-select:none; }
+.toggle input { display:none; }
+.toggle-slider { position:relative; width:32px; height:18px; background:var(--gray); border-radius:9px; transition:background .2s; flex-shrink:0; }
+.toggle-slider::after { content:''; position:absolute; top:2px; left:2px; width:14px; height:14px; background:#fff; border-radius:50%; transition:transform .2s; box-shadow:0 1px 3px rgba(0,0,0,.3); }
+.toggle input:checked + .toggle-slider { background:#43a047; }
+.toggle input:checked + .toggle-slider::after { transform:translateX(14px); }
+.toggle-lbl { font-size:10px; font-weight:600; color:var(--muted); }
 .add-btn { color:var(--muted); font-size:11px; cursor:pointer; padding:6px 8px; }
 .add-btn:hover { color:var(--accent); }
 
@@ -161,8 +168,8 @@ body.hide-available .duty-blk.available-workover { display:none!important; }
   <div class="ctrls">
     <button onclick="showWorkoverPop(event)" title="Add a rotation for a pilot" id="addRotBtn">+ Work Over</button>
     <button id="simBtn" onclick="toggleSimulate()" title="Simulate pilot coverage without saving to sheet">🎮 Simulate</button>
-    <button id="covBtn" onclick="toggleCoverage()" title="Toggle mission coverage on pilot rows">👁 Coverage</button>
-    <button id="availBtn" onclick="toggleAvailable()" title="Toggle available rotation bars">👁 Available</button>
+    <label class="toggle" title="Toggle mission coverage on pilot rows"><input type="checkbox" id="covToggle" checked onchange="toggleCoverage()"><span class="toggle-slider"></span><span class="toggle-lbl">Coverage</span></label>
+    <label class="toggle" title="Toggle available rotation bars"><input type="checkbox" id="availToggle" checked onchange="toggleAvailable()"><span class="toggle-slider"></span><span class="toggle-lbl">Available</span></label>
     <button class="theme-btn" onclick="toggleTheme()" id="themeBtn" title="Toggle light/dark theme">🌙</button>
     <button onclick="goToday()">Today</button>
     <button id="commitBtn" onclick="commitChanges()" title="Save changes to Google Sheets" style="position:relative;">💾 Commit</button>
@@ -187,7 +194,7 @@ body.hide-available .duty-blk.available-workover { display:none!important; }
   <div class="leg"><input type="color" id="cc-vacation" style="width:14px;height:14px;border:none;padding:0;cursor:pointer;border-radius:2px" onchange="ROT_COLORS.vacation=this.value;saveRotColors();render()"> Vacation</div>
   <div class="leg"><input type="color" id="cc-available" style="width:14px;height:14px;border:none;padding:0;cursor:pointer;border-radius:2px" onchange="ROT_COLORS.available=this.value;saveRotColors();render()"> Available</div>
   <div class="leg"><div class="lsw" style="background:var(--yellow)"></div> Cursor</div>
-  <span id="app-version" style="font-size:10px;opacity:.5;cursor:pointer;margin-left:4px;user-select:none">v3.40</span>
+  <span id="app-version" style="font-size:10px;opacity:.5;cursor:pointer;margin-left:4px;user-select:none">v3.41</span>
   <span id="legend-hint" style="margin-left:auto;font-size:10px">Add a note about 'Vacation' or 'Availability' with the + Add Rotation button.</span>
 </div>
 
@@ -273,19 +280,13 @@ function applyModes(){
 function applyAdminMode(){ applyModes(); }
 
 function toggleAvailable(){
-  document.body.classList.toggle('hide-available');
-  const hidden=document.body.classList.contains('hide-available');
-  const btn=document.getElementById('availBtn');
-  if(btn) btn.style.opacity=hidden?'.5':'1';
-  showMessage(hidden?'👁 Available bars hidden':'👁 Available bars visible','info');
+  const cb=document.getElementById('availToggle');
+  document.body.classList.toggle('hide-available',!cb.checked);
 }
 
 function toggleCoverage(){
-  document.body.classList.toggle('hide-coverage');
-  const hidden=document.body.classList.contains('hide-coverage');
-  const btn=document.getElementById('covBtn');
-  if(btn) btn.style.opacity=hidden?'.5':'1';
-  showMessage(hidden?'👁 Coverage hidden on pilot rows':'👁 Coverage visible','info');
+  const cb=document.getElementById('covToggle');
+  document.body.classList.toggle('hide-coverage',!cb.checked);
 }
 
 function toggleSimulate(){
