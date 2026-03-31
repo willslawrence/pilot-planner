@@ -329,7 +329,7 @@ async function fetchFromAPI() {
     
     // Convert rotations to the pilot rot format
     for (const pilot of PILOTS) {
-      pilot.rot = buildRotationsForPilot(pilot.name, ROTATIONS);
+      pilot.rot = buildRotationsForPilot(pilot.name, ROTATIONS, pilot.management);
     }
     
     MISSIONS = data.missions.filter(mission => mission.MissionID && mission.Name).map(mission => {
@@ -531,7 +531,7 @@ function parseDateFromISO(isoString) {
   return F(date); // Convert to YYYY-MM-DD format
 }
 
-function buildRotationsForPilot(pilotName, rotations) {
+function buildRotationsForPilot(pilotName, rotations, isManagement) {
   const pilotRotations = rotations.filter(r => r.pilot === pilotName);
   
   // If the sheet has explicit rotation blocks (ON/OFF/WORKOVER/VACATION_EXTRA),
@@ -550,20 +550,25 @@ function buildRotationsForPilot(pilotName, rotations) {
     const extEnd = '2027-12-31';
     const last = blocks[blocks.length - 1];
     if (last && last.e < extEnd && (last.st === 'ON' || last.st === 'OFF')) {
-      // Complete the last block to its full 42 days first
-      const lastDays = dB(D(last.s), D(last.e));
-      if (lastDays < 42) {
-        last.e = addDaysL(last.s, 41);
-        if (last.e > extEnd) last.e = extEnd;
-      }
-      // Then alternate 42-day blocks
-      let nextSt = last.st === 'OFF' ? 'ON' : 'OFF';
-      let curDate = addDaysL(last.e, 1);
-      while (curDate <= extEnd) {
-        const blockEnd = addDaysL(curDate, 41);
-        blocks.push({ s: curDate, e: blockEnd > extEnd ? extEnd : blockEnd, st: nextSt });
-        curDate = addDaysL(blockEnd > extEnd ? extEnd : blockEnd, 1);
-        nextSt = nextSt === 'OFF' ? 'ON' : 'OFF';
+      if (isManagement) {
+        // Management pilots: always ON in extrapolated period
+        last.e = extEnd;
+      } else {
+        // Complete the last block to its full 42 days first
+        const lastDays = dB(D(last.s), D(last.e));
+        if (lastDays < 42) {
+          last.e = addDaysL(last.s, 41);
+          if (last.e > extEnd) last.e = extEnd;
+        }
+        // Then alternate 42-day blocks
+        let nextSt = last.st === 'OFF' ? 'ON' : 'OFF';
+        let curDate = addDaysL(last.e, 1);
+        while (curDate <= extEnd) {
+          const blockEnd = addDaysL(curDate, 41);
+          blocks.push({ s: curDate, e: blockEnd > extEnd ? extEnd : blockEnd, st: nextSt });
+          curDate = addDaysL(blockEnd > extEnd ? extEnd : blockEnd, 1);
+          nextSt = nextSt === 'OFF' ? 'ON' : 'OFF';
+        }
       }
     }
     return blocks;
@@ -620,24 +625,30 @@ function buildRotationsForPilot(pilotName, rotations) {
     // Step 2: the last block (ON or OFF) may be incomplete — complete it to 42 days, then continue
     const lastRot = result[result.length - 1];
     if (lastRot.e < yearEnd) {
-      // Calculate how many days the last block spans
-      const lastDays = dB(D(lastRot.s), D(lastRot.e));
-      const remaining = 42 - lastDays;
-      
-      if (remaining > 0) {
-        // Extend the last block to complete its 6 weeks
-        lastRot.e = addDaysL(lastRot.s, 41);
-        if (lastRot.e > yearEnd) lastRot.e = yearEnd;
-      }
-      
-      // Now alternate 42-day blocks from there
-      let nextSt = lastRot.st === 'OFF' ? 'ON' : 'OFF';
-      let curDate = addDaysL(lastRot.e, 1);
-      while (curDate <= yearEnd) {
-        const blockEnd = addDaysL(curDate, 41);
-        result.push({ s: curDate, e: blockEnd > yearEnd ? yearEnd : blockEnd, st: nextSt });
-        curDate = addDaysL(blockEnd > yearEnd ? yearEnd : blockEnd, 1);
-        nextSt = nextSt === 'OFF' ? 'ON' : 'OFF';
+      if (isManagement) {
+        // Management pilots: always ON in extrapolated period
+        lastRot.e = yearEnd;
+        lastRot.st = 'ON';
+      } else {
+        // Calculate how many days the last block spans
+        const lastDays = dB(D(lastRot.s), D(lastRot.e));
+        const remaining = 42 - lastDays;
+        
+        if (remaining > 0) {
+          // Extend the last block to complete its 6 weeks
+          lastRot.e = addDaysL(lastRot.s, 41);
+          if (lastRot.e > yearEnd) lastRot.e = yearEnd;
+        }
+        
+        // Now alternate 42-day blocks from there
+        let nextSt = lastRot.st === 'OFF' ? 'ON' : 'OFF';
+        let curDate = addDaysL(lastRot.e, 1);
+        while (curDate <= yearEnd) {
+          const blockEnd = addDaysL(curDate, 41);
+          result.push({ s: curDate, e: blockEnd > yearEnd ? yearEnd : blockEnd, st: nextSt });
+          curDate = addDaysL(blockEnd > yearEnd ? yearEnd : blockEnd, 1);
+          nextSt = nextSt === 'OFF' ? 'ON' : 'OFF';
+        }
       }
     }
     
