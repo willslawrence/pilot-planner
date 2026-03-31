@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Pilot Availability Planner v3.41 — THC H125</title>
+<title>Pilot Availability Planner v3.42 — THC H125</title>
 <style>
 :root {
   --bg: #0f1123;
@@ -194,7 +194,7 @@ body.hide-available .duty-blk.available-workover { display:none!important; }
   <div class="leg"><input type="color" id="cc-vacation" style="width:14px;height:14px;border:none;padding:0;cursor:pointer;border-radius:2px" onchange="ROT_COLORS.vacation=this.value;saveRotColors();render()"> Vacation</div>
   <div class="leg"><input type="color" id="cc-available" style="width:14px;height:14px;border:none;padding:0;cursor:pointer;border-radius:2px" onchange="ROT_COLORS.available=this.value;saveRotColors();render()"> Available</div>
   <div class="leg"><div class="lsw" style="background:var(--yellow)"></div> Cursor</div>
-  <span id="app-version" style="font-size:10px;opacity:.5;cursor:pointer;margin-left:4px;user-select:none">v3.41</span>
+  <span id="app-version" style="font-size:10px;opacity:.5;cursor:pointer;margin-left:4px;user-select:none">v3.42</span>
   <span id="legend-hint" style="margin-left:auto;font-size:10px">Add a note about 'Vacation' or 'Availability' with the + Add Rotation button.</span>
 </div>
 
@@ -541,12 +541,25 @@ function buildRotationsForPilot(pilotName, rotations) {
   );
   
   if (hasExplicitBlocks) {
-    // Sheet has full rotation data — use as-is
-    return pilotRotations.map(r => {
+    // Sheet has full rotation data — use as-is, then extrapolate into 2027
+    const blocks = pilotRotations.map(r => {
       const rot = { s: r.start, e: r.end, st: r.type };
       if(r.note) rot.note = r.note;
       return rot;
     }).sort((a, b) => a.s.localeCompare(b.s));
+    const extEnd = '2027-12-31';
+    const last = blocks[blocks.length - 1];
+    if (last && last.e < extEnd && (last.st === 'ON' || last.st === 'OFF')) {
+      let nextSt = last.st === 'OFF' ? 'ON' : 'OFF';
+      let curDate = addDaysL(last.e, 1);
+      while (curDate <= extEnd) {
+        const blockEnd = addDaysL(curDate, 41);
+        blocks.push({ s: curDate, e: blockEnd > extEnd ? extEnd : blockEnd, st: nextSt });
+        curDate = addDaysL(blockEnd > extEnd ? extEnd : blockEnd, 1);
+        nextSt = nextSt === 'OFF' ? 'ON' : 'OFF';
+      }
+    }
+    return blocks;
   }
   
   // Fallback: only OFF/VACATION entries (from Fleetplan import) — fill gaps with ON
@@ -568,33 +581,50 @@ function buildRotationsForPilot(pilotName, rotations) {
     }
   }
   
-  // Fill gaps with ON periods for 2026
-  const year2026Start = '2026-01-01';
-  const year2026End = '2026-12-31';
+  // Fill gaps with ON periods and extrapolate into 2027
+  const yearStart = '2026-01-01';
+  const yearEnd = '2027-12-31';
   
   if (result.length === 0) {
-    result.push({ s: year2026Start, e: year2026End, st: 'ON' });
+    result.push({ s: yearStart, e: yearEnd, st: 'ON' });
   } else {
     result.sort((a, b) => a.s.localeCompare(b.s));
     
-    const onPeriods = [];
-    let currentDate = year2026Start;
+    // Extrapolate rotation pattern into 2027 using 42-day (6-week) cycles
+    const lastRot = result[result.length - 1];
+    if (lastRot.e < yearEnd) {
+      // Determine what follows the last block: if last is OFF, next is ON and vice versa
+      let nextSt = lastRot.st === 'OFF' ? 'ON' : 'OFF';
+      let curDate = addDaysL(lastRot.e, 1);
+      while (curDate <= yearEnd) {
+        const blockEnd = addDaysL(curDate, 41); // 42 days = 6 weeks
+        result.push({ s: curDate, e: blockEnd > yearEnd ? yearEnd : blockEnd, st: nextSt });
+        curDate = addDaysL(blockEnd > yearEnd ? yearEnd : blockEnd, 1);
+        nextSt = nextSt === 'OFF' ? 'ON' : 'OFF';
+      }
+    }
     
-    for (const offPeriod of result) {
-      if (currentDate < offPeriod.s) {
+    result.sort((a, b) => a.s.localeCompare(b.s));
+    
+    // Fill any remaining gaps with ON
+    const onPeriods = [];
+    let currentDate = yearStart;
+    
+    for (const period of result) {
+      if (currentDate < period.s) {
         onPeriods.push({
           s: currentDate,
-          e: addDaysL(offPeriod.s, -1),
+          e: addDaysL(period.s, -1),
           st: 'ON'
         });
       }
-      currentDate = addDaysL(offPeriod.e, 1);
+      currentDate = addDaysL(period.e, 1);
     }
     
-    if (currentDate <= year2026End) {
+    if (currentDate <= yearEnd) {
       onPeriods.push({
         s: currentDate,
-        e: year2026End,
+        e: yearEnd,
         st: 'ON'
       });
     }
@@ -844,7 +874,7 @@ function tD(){ return dB(T0,T1); }
 
 
 // ====== CONSTANTS ======
-const T0=new Date(2026,0,1), T1=new Date(2027,0,31), DW=17, LW=160;
+const T0=new Date(2026,0,1), T1=new Date(2027,11,31), DW=17, LW=160;
 
 function updateFirstNameCount() {
   const _fnCount = {};
