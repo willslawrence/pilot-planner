@@ -2323,18 +2323,29 @@ function showAddPilotPop(e){
   const div=document.createElement('div');div.className='pop';
   div.innerHTML=`
     <div style="font-weight:700;font-size:12px;margin-bottom:4px">Add Pilot</div>
+    <label>Type</label>
+    <select id="ap-type" onchange="toggleTempFields()">
+      <option value="regular">Regular (6-week rotations)</option>
+      <option value="temp">Temp (single ON block)</option>
+    </select>
     <label>Name</label><input id="ap-name" placeholder="Full Name">
     <label>Qualifications</label>
     <div style="display:flex;gap:8px;margin:4px 0">
       <label style="font-size:11px;display:flex;align-items:center;gap:3px"><input type="checkbox" id="ap-uam"> UAM</label>
       <label style="font-size:11px;display:flex;align-items:center;gap:3px"><input type="checkbox" id="ap-survey"> Survey</label>
     </div>
-    <label>First Rotation Start</label><input type="date" id="ap-rot-start" value="${F(sel)}">
-    <label>Status</label>
-    <select id="ap-rot-status">
-      <option value="ON">ON</option>
-      <option value="OFF">OFF</option>
-    </select>
+    <div id="ap-regular-fields">
+      <label>First Rotation Start</label><input type="date" id="ap-rot-start" value="${F(sel)}">
+      <label>Status</label>
+      <select id="ap-rot-status">
+        <option value="ON">ON</option>
+        <option value="OFF">OFF</option>
+      </select>
+    </div>
+    <div id="ap-temp-fields" style="display:none">
+      <label>Start Date</label><input type="date" id="ap-temp-start" value="${F(sel)}">
+      <label>End Date</label><input type="date" id="ap-temp-end" value="${addDaysL(F(sel),41)}">
+    </div>
     <div class="pb">
       <button class="pcancel" onclick="cPop()">Cancel</button>
       <button class="psave" onclick="saveAddPilot()">Add</button>
@@ -2344,6 +2355,11 @@ function showAddPilotPop(e){
   popPos(div,e);
   setTimeout(()=>document.addEventListener('click',cPop2),10);
 }
+function toggleTempFields(){
+  const isTemp=document.getElementById('ap-type').value==='temp';
+  document.getElementById('ap-regular-fields').style.display=isTemp?'none':'';
+  document.getElementById('ap-temp-fields').style.display=isTemp?'':'none';
+}
 function saveAddPilot(){
   const name=document.getElementById('ap-name').value.trim();
   if(!name){alert('Enter a name');return;}
@@ -2351,18 +2367,24 @@ function saveAddPilot(){
   const quals=[];
   if(document.getElementById('ap-uam').checked) quals.push('UAM');
   if(document.getElementById('ap-survey').checked) quals.push('Survey');
-  const rotStart=document.getElementById('ap-rot-start').value||F(sel);
-  const rotStatus=document.getElementById('ap-rot-status').value;
-  // Create alternating 6-week blocks for the year
+  const isTemp=document.getElementById('ap-type').value==='temp';
   const rots=[];
-  let cur=new Date(D(rotStart));
-  let st=rotStatus;
-  while(F(cur)<='2026-12-31'){
-    const end=new Date(cur);end.setDate(end.getDate()+41);
-    const eStr=F(end)>'2026-12-31'?'2026-12-31':F(end);
-    rots.push({s:F(cur),e:eStr,st:st});
-    cur=new Date(end);cur.setDate(cur.getDate()+1);
-    st=st==='ON'?'OFF':'ON';
+  if(isTemp){
+    const start=document.getElementById('ap-temp-start').value||F(sel);
+    const end=document.getElementById('ap-temp-end').value||addDaysL(start,41);
+    rots.push({s:start,e:end,st:'ON'});
+  } else {
+    const rotStart=document.getElementById('ap-rot-start').value||F(sel);
+    const rotStatus=document.getElementById('ap-rot-status').value;
+    let cur=new Date(D(rotStart));
+    let st=rotStatus;
+    while(F(cur)<='2027-12-31'){
+      const end=new Date(cur);end.setDate(end.getDate()+41);
+      const eStr=F(end)>'2027-12-31'?'2027-12-31':F(end);
+      rots.push({s:F(cur),e:eStr,st:st});
+      cur=new Date(end);cur.setDate(cur.getDate()+1);
+      st=st==='ON'?'OFF':'ON';
+    }
   }
   PILOTS.push({name:name,quals:quals,rot:rots,ev:[]});
   cPop();
