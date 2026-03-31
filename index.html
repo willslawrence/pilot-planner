@@ -2324,8 +2324,9 @@ function showAddPilotPop(e){
   div.innerHTML=`
     <div style="font-weight:700;font-size:12px;margin-bottom:4px">Add Pilot</div>
     <label>Type</label>
-    <select id="ap-type" onchange="toggleTempFields()">
-      <option value="regular">Regular (6-week rotations)</option>
+    <select id="ap-type" onchange="togglePilotTypeFields()">
+      <option value="rotational">Rotational (6-week ON/OFF)</option>
+      <option value="management">Management (always ON)</option>
       <option value="temp">Temp (single ON block)</option>
     </select>
     <label>Name</label><input id="ap-name" placeholder="Full Name">
@@ -2355,10 +2356,10 @@ function showAddPilotPop(e){
   popPos(div,e);
   setTimeout(()=>document.addEventListener('click',cPop2),10);
 }
-function toggleTempFields(){
-  const isTemp=document.getElementById('ap-type').value==='temp';
-  document.getElementById('ap-regular-fields').style.display=isTemp?'none':'';
-  document.getElementById('ap-temp-fields').style.display=isTemp?'':'none';
+function togglePilotTypeFields(){
+  const t=document.getElementById('ap-type').value;
+  document.getElementById('ap-regular-fields').style.display=t==='rotational'?'':'none';
+  document.getElementById('ap-temp-fields').style.display=t==='temp'?'':'none';
 }
 function saveAddPilot(){
   const name=document.getElementById('ap-name').value.trim();
@@ -2367,12 +2368,14 @@ function saveAddPilot(){
   const quals=[];
   if(document.getElementById('ap-uam').checked) quals.push('UAM');
   if(document.getElementById('ap-survey').checked) quals.push('Survey');
-  const isTemp=document.getElementById('ap-type').value==='temp';
+  const pType=document.getElementById('ap-type').value;
   const rots=[];
-  if(isTemp){
+  if(pType==='temp'){
     const start=document.getElementById('ap-temp-start').value||F(sel);
     const end=document.getElementById('ap-temp-end').value||addDaysL(start,41);
     rots.push({s:start,e:end,st:'ON'});
+  } else if(pType==='management'){
+    rots.push({s:'2026-01-01',e:'2027-12-31',st:'ON'});
   } else {
     const rotStart=document.getElementById('ap-rot-start').value||F(sel);
     const rotStatus=document.getElementById('ap-rot-status').value;
@@ -2386,7 +2389,7 @@ function saveAddPilot(){
       st=st==='ON'?'OFF':'ON';
     }
   }
-  PILOTS.push({name:name,quals:quals,rot:rots,ev:[]});
+  PILOTS.push({name:name,quals:quals,rot:rots,ev:[],management:pType==='management'?true:false});
   cPop();
   render();
 }
