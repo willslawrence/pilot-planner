@@ -550,6 +550,13 @@ function buildRotationsForPilot(pilotName, rotations) {
     const extEnd = '2027-12-31';
     const last = blocks[blocks.length - 1];
     if (last && last.e < extEnd && (last.st === 'ON' || last.st === 'OFF')) {
+      // Complete the last block to its full 42 days first
+      const lastDays = dB(D(last.s), D(last.e));
+      if (lastDays < 42) {
+        last.e = addDaysL(last.s, 41);
+        if (last.e > extEnd) last.e = extEnd;
+      }
+      // Then alternate 42-day blocks
       let nextSt = last.st === 'OFF' ? 'ON' : 'OFF';
       let curDate = addDaysL(last.e, 1);
       while (curDate <= extEnd) {
@@ -581,7 +588,8 @@ function buildRotationsForPilot(pilotName, rotations) {
     }
   }
   
-  // Fill gaps with ON periods and extrapolate into 2027
+  // Fill gaps with ON periods, then extrapolate into 2027
+  // Step 1: fill gaps between OFF blocks with ON (no year boundary)
   const yearStart = '2026-01-01';
   const yearEnd = '2027-12-31';
   
@@ -590,46 +598,49 @@ function buildRotationsForPilot(pilotName, rotations) {
   } else {
     result.sort((a, b) => a.s.localeCompare(b.s));
     
-    // Extrapolate rotation pattern into 2027 using 42-day (6-week) cycles
+    // Fill gaps between known OFF/VACATION blocks with ON
+    const onPeriods = [];
+    let currentDate = yearStart;
+    
+    for (const offPeriod of result) {
+      if (currentDate < offPeriod.s) {
+        onPeriods.push({
+          s: currentDate,
+          e: addDaysL(offPeriod.s, -1),
+          st: 'ON'
+        });
+      }
+      currentDate = addDaysL(offPeriod.e, 1);
+    }
+    
+    // Don't cap at year end yet — leave the tail for extrapolation
+    result.push(...onPeriods);
+    result.sort((a, b) => a.s.localeCompare(b.s));
+    
+    // Step 2: the last block (ON or OFF) may be incomplete — complete it to 42 days, then continue
     const lastRot = result[result.length - 1];
     if (lastRot.e < yearEnd) {
-      // Determine what follows the last block: if last is OFF, next is ON and vice versa
+      // Calculate how many days the last block spans
+      const lastDays = dB(D(lastRot.s), D(lastRot.e));
+      const remaining = 42 - lastDays;
+      
+      if (remaining > 0) {
+        // Extend the last block to complete its 6 weeks
+        lastRot.e = addDaysL(lastRot.s, 41);
+        if (lastRot.e > yearEnd) lastRot.e = yearEnd;
+      }
+      
+      // Now alternate 42-day blocks from there
       let nextSt = lastRot.st === 'OFF' ? 'ON' : 'OFF';
       let curDate = addDaysL(lastRot.e, 1);
       while (curDate <= yearEnd) {
-        const blockEnd = addDaysL(curDate, 41); // 42 days = 6 weeks
+        const blockEnd = addDaysL(curDate, 41);
         result.push({ s: curDate, e: blockEnd > yearEnd ? yearEnd : blockEnd, st: nextSt });
         curDate = addDaysL(blockEnd > yearEnd ? yearEnd : blockEnd, 1);
         nextSt = nextSt === 'OFF' ? 'ON' : 'OFF';
       }
     }
     
-    result.sort((a, b) => a.s.localeCompare(b.s));
-    
-    // Fill any remaining gaps with ON
-    const onPeriods = [];
-    let currentDate = yearStart;
-    
-    for (const period of result) {
-      if (currentDate < period.s) {
-        onPeriods.push({
-          s: currentDate,
-          e: addDaysL(period.s, -1),
-          st: 'ON'
-        });
-      }
-      currentDate = addDaysL(period.e, 1);
-    }
-    
-    if (currentDate <= yearEnd) {
-      onPeriods.push({
-        s: currentDate,
-        e: yearEnd,
-        st: 'ON'
-      });
-    }
-    
-    result.push(...onPeriods);
     result.sort((a, b) => a.s.localeCompare(b.s));
   }
   
