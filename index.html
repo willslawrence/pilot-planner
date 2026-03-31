@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Pilot Availability Planner v3.35 — THC H125</title>
+<title>Pilot Availability Planner v3.36 — THC H125</title>
 <style>
 :root {
   --bg: #0f1123;
@@ -180,7 +180,7 @@ body.simulate-mode .sim-banner { display:block; }
   <div class="leg"><div class="lsw" style="background:#F59E0B"></div> Vacation</div>
   <div class="leg"><div class="lsw" style="background:#F472B6"></div> Available</div>
   <div class="leg"><div class="lsw" style="background:var(--yellow)"></div> Cursor</div>
-  <span id="app-version" style="font-size:10px;opacity:.5;cursor:pointer;margin-left:4px;user-select:none">v3.35</span>
+  <span id="app-version" style="font-size:10px;opacity:.5;cursor:pointer;margin-left:4px;user-select:none">v3.36</span>
   <span id="legend-hint" style="margin-left:auto;font-size:10px">Add a note about 'Vacation' or 'Availability' with the + Add Rotation button.</span>
 </div>
 
@@ -234,8 +234,8 @@ function applyModes(){
   const resetBtns=document.querySelectorAll('.ctrls button');
   if(commitBtn) commitBtn.style.display=adminMode?'':'none';
   resetBtns.forEach(b=>{if(b.textContent.includes('🗑️')) b.style.display=adminMode?'':'none';});
-  // Add Mission & Add Pilot buttons — admin only
-  document.querySelectorAll('.add-btn').forEach(el=>el.style.display=adminMode?'':'none');
+  // Add Mission & Add Pilot buttons — admin or simulate
+  document.querySelectorAll('.add-btn').forEach(el=>el.style.display=canEdit?'':'none');
   // Pilot row "+" rotation add buttons — admin or simulate
   document.querySelectorAll('.rot-add-btn').forEach(el=>el.style.display=canEdit?'':'none');
   // Rotation bars: clickable only in admin mode
