@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Pilot Availability Planner v3.52 — THC H125</title>
+<title>Pilot Availability Planner v3.53 — THC H125</title>
 <style>
 :root {
   --bg: #0f1123;
@@ -195,7 +195,7 @@ body.hide-available .duty-blk.available-workover { display:none!important; }
   <div class="leg"><input type="color" id="cc-vacation" style="width:14px;height:14px;border:none;padding:0;cursor:pointer;border-radius:2px" onchange="ROT_COLORS.vacation=this.value;saveRotColors();render()"> Vacation</div>
   <div class="leg"><input type="color" id="cc-available" style="width:14px;height:14px;border:none;padding:0;cursor:pointer;border-radius:2px" onchange="ROT_COLORS.available=this.value;saveRotColors();render()"> Available</div>
   <div class="leg"><div class="lsw" style="background:var(--yellow)"></div> Cursor</div>
-  <span id="app-version" style="font-size:10px;opacity:.5;cursor:pointer;margin-left:4px;user-select:none">v3.52</span>
+  <span id="app-version" style="font-size:10px;opacity:.5;cursor:pointer;margin-left:4px;user-select:none">v3.53</span>
   <span id="legend-hint" style="margin-left:auto;font-size:10px">Add a note about 'Vacation' or 'Availability' with the + Add Rotation button.</span>
 </div>
 
@@ -564,6 +564,19 @@ function buildRotationsForPilot(pilotName, rotations, isManagement) {
   );
   
   if (hasExplicitBlocks) {
+    // Management pilots: collapse everything into a single ON block
+    if (isManagement) {
+      const allDates = pilotRotations.map(r => [r.start, r.end]).flat().filter(d=>d).sort();
+      const s = allDates[0] || '2026-01-01';
+      const e = allDates[allDates.length-1] || '2027-12-31';
+      // Keep non-ON/OFF blocks (vacations etc) but make everything else ON
+      const specials = pilotRotations.filter(r => r.type !== 'ON' && r.type !== 'OFF').map(r => {
+        const rot = { s: r.start, e: r.end, st: r.type };
+        if(r.note) rot.note = r.note;
+        return rot;
+      });
+      return [{ s: s, e: e > '2027-12-31' ? '2027-12-31' : e, st: 'ON' }, ...specials].sort((a,b)=>a.s.localeCompare(b.s));
+    }
     // Sheet has full rotation data — use as-is, then extrapolate into 2027
     const blocks = pilotRotations.map(r => {
       const rot = { s: r.start, e: r.end, st: r.type };
