@@ -169,7 +169,7 @@ body.hide-available .duty-blk.available-workover { display:none!important; }
     <button onclick="showWorkoverPop(event)" title="Add a rotation for a pilot" id="addRotBtn">+ Work Over</button>
     <button id="simBtn" onclick="toggleSimulate()" title="Simulate pilot coverage without saving to sheet">🎮 Simulate</button>
     <label class="toggle" title="Toggle mission coverage on pilot rows"><input type="checkbox" id="covToggle" checked onchange="toggleCoverage()"><span class="toggle-slider"></span><span class="toggle-lbl">Coverage</span></label>
-    <label class="toggle" title="Toggle available rotation bars"><input type="checkbox" id="availToggle" checked onchange="toggleAvailable()"><span class="toggle-slider"></span><span class="toggle-lbl">Available</span></label>
+    <label class="toggle" title="Toggle available rotation bars"><input type="checkbox" id="availToggle" onchange="toggleAvailable()"><span class="toggle-slider"></span><span class="toggle-lbl">Available</span></label>
 
     <button onclick="window.open('https://willslawrence.github.io/thc-fleet-map-v2/','_blank')" title="Open Fleet Map">🗺️ Fleet Map</button>
     <button id="commitBtn" onclick="commitChanges()" title="Save changes to Google Sheets" style="position:relative;">💾 Commit</button>
@@ -2510,6 +2510,7 @@ async function initApp() {
 }
 
 // Start the app
+document.body.classList.add('hide-available');
 initApp();
 </script>
 </body>
