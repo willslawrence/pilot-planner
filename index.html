@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Pilot Availability Planner v3.54 — THC H125</title>
+<title>Pilot Availability Planner v3.55 — THC H125</title>
 <style>
 :root {
   --bg: #0f1123;
@@ -195,7 +195,7 @@ body.hide-available .duty-blk.available-workover { display:none!important; }
   <div class="leg"><input type="color" id="cc-vacation" style="width:14px;height:14px;border:none;padding:0;cursor:pointer;border-radius:2px" onchange="ROT_COLORS.vacation=this.value;saveRotColors();render()"> Vacation</div>
   <div class="leg"><input type="color" id="cc-available" style="width:14px;height:14px;border:none;padding:0;cursor:pointer;border-radius:2px" onchange="ROT_COLORS.available=this.value;saveRotColors();render()"> Available</div>
   <div class="leg"><div class="lsw" style="background:var(--yellow)"></div> Cursor</div>
-  <span id="app-version" style="font-size:10px;opacity:.5;cursor:pointer;margin-left:4px;user-select:none">v3.54</span>
+  <span id="app-version" style="font-size:10px;opacity:.5;cursor:pointer;margin-left:4px;user-select:none">v3.55</span>
   <span id="legend-hint" style="margin-left:auto;font-size:10px">Add a note about 'Vacation' or 'Availability' with the + Add Rotation button.</span>
 </div>
 
@@ -1456,7 +1456,16 @@ function pilotRow(p,td,ds){
         <span class="rot-date rot-end">${eLabel}</span>
       </div>`;
     } else {
-      bars+=`<div class="duty-blk off" data-pilot="${p.name}" data-ri="${ri}" style="left:${rl}px;width:${rw}px;background:${ROT_COLORS.off}"></div>`;
+      const offDays = dB(D(r.s),D(r.e))+1;
+      const offFullWeeks = Math.floor(offDays/7);
+      const offRemDays = offDays % 7;
+      const offIsStandard = offDays===42;
+      const offWeekLabel = offIsStandard ? '6W' : (offRemDays===0 ? offFullWeeks+'W' : offFullWeeks+'W+'+offRemDays+'D');
+      const offCenterColor = offIsStandard ? 'white' : 'black';
+      const offTip=r.note?`${p.name} — OFF\n${r.note}`.replace(/"/g,'&quot;'):'';
+      bars+=`<div class="duty-blk off" data-pilot="${p.name}" data-ri="${ri}" ${offTip?`title="${offTip}"`:''} style="left:${rl}px;width:${rw}px;background:${ROT_COLORS.off}">
+        <span style="position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);font-size:10px;font-weight:700;color:${offCenterColor};pointer-events:none;white-space:nowrap">${offWeekLabel}</span>
+      </div>`;
     }
   }
   // Pilot assignment blocks on pilot row
