@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Pilot Availability Planner v3.55 — THC H125</title>
+<title>Pilot Availability Planner v3.56 — THC H125</title>
 <style>
 :root {
   --bg: #0f1123;
@@ -195,7 +195,7 @@ body.hide-available .duty-blk.available-workover { display:none!important; }
   <div class="leg"><input type="color" id="cc-vacation" style="width:14px;height:14px;border:none;padding:0;cursor:pointer;border-radius:2px" onchange="ROT_COLORS.vacation=this.value;saveRotColors();render()"> Vacation</div>
   <div class="leg"><input type="color" id="cc-available" style="width:14px;height:14px;border:none;padding:0;cursor:pointer;border-radius:2px" onchange="ROT_COLORS.available=this.value;saveRotColors();render()"> Available</div>
   <div class="leg"><div class="lsw" style="background:var(--yellow)"></div> Cursor</div>
-  <span id="app-version" style="font-size:10px;opacity:.5;cursor:pointer;margin-left:4px;user-select:none">v3.55</span>
+  <span id="app-version" style="font-size:10px;opacity:.5;cursor:pointer;margin-left:4px;user-select:none">v3.56</span>
   <span id="legend-hint" style="margin-left:auto;font-size:10px">Add a note about 'Vacation' or 'Availability' with the + Add Rotation button.</span>
 </div>
 
@@ -1215,6 +1215,14 @@ function render(){
   if(todayOff>=0 && todayOff<td){
     const todayX=LW+todayOff*DW;
     html+=`<div style="position:absolute;top:0;bottom:0;left:${todayX}px;width:2px;background:#2196F3;z-index:12;pointer-events:none;opacity:.7"></div>`;
+  }
+  // New Year vertical lines
+  for(let yr=T0.getFullYear()+1; yr<=2027; yr++){
+    const nyOff=dO(new Date(yr,0,1));
+    if(nyOff>=0 && nyOff<td){
+      const nyX=LW+nyOff*DW;
+      html+=`<div style="position:absolute;top:0;bottom:0;left:${nyX}px;width:2px;background:#000;z-index:11;pointer-events:none;opacity:.6"></div>`;
+    }
   }
 
   // SVG overlay
