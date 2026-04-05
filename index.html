@@ -166,7 +166,7 @@ body.hide-all-missions .sec-row { display:none; }
 body.hide-canceled-past .m-row.canceled { display:none; }
 body.hide-canceled-past .m-row.past { display:none; }
 .admin-only-toggle { display:none; }
-body:not(.viewer-mode) .admin-only-toggle { display:flex; }
+body.viewer-mode .admin-only-toggle { display:none; }
 </style>
 </head>
 <body>
@@ -1384,7 +1384,7 @@ function missionRows(m,td){
 
   // Add status classes for filtering
   const isCanceled = m.status && m.status.toLowerCase() === 'canceled';
-  const isPast = m.end < TODAY;
+  const isPast = m.end < F(new Date());
   const statusClasses = `${isCanceled ? ' canceled' : ''}${isPast ? ' past' : ''}`;
   
   h+=`<div class="row m-row${statusClasses}" style="min-height:${totalH}px"><div class="rlabel" style="min-height:${totalH}px">${labelHtml}</div><div class="rbars" style="width:${td*DW}px;height:${totalH}px;position:relative">${barsHtml}</div></div>`;
@@ -1456,7 +1456,7 @@ function adHocRows(missions,td){
     }
     // Add status classes for filtering — if ANY mission in lane is canceled/past, mark the whole lane
     const anyCanceled = lane.some(m => m.status && m.status.toLowerCase() === 'canceled');
-    const anyPast = lane.some(m => m.end < TODAY);
+    const anyPast = lane.some(m => m.end < F(new Date()));
     const statusClasses = `${anyCanceled ? ' canceled' : ''}${anyPast ? ' past' : ''}`;
     
     h+=`<div class="row m-row${statusClasses}" style="min-height:${totalH}px"><div class="rlabel" style="min-height:${totalH}px">${labelHtml}</div><div class="rbars" style="width:${td*DW}px;height:${totalH}px;position:relative">${barsHtml}</div></div>`;
