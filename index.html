@@ -166,7 +166,7 @@ body.hide-all-missions .sec-row { display:none; }
 body.hide-canceled-past .m-row.canceled { display:none; }
 body.hide-canceled-past .m-row.past { display:none; }
 .admin-only-toggle { display:none; }
-body.viewer-mode .admin-only-toggle { display:none; }
+body:not(.viewer-mode) .admin-only-toggle { display:flex; }
 </style>
 </head>
 <body>
@@ -177,7 +177,7 @@ body.viewer-mode .admin-only-toggle { display:none; }
     <button onclick="showWorkoverPop(event)" title="Add a rotation for a pilot" id="addRotBtn">+ Work Over</button>
     <button id="simBtn" onclick="toggleSimulate()" title="Simulate pilot coverage without saving to sheet">🎮 Simulate</button>
     <label class="toggle admin-only-toggle" title="Toggle mission coverage on pilot rows"><input type="checkbox" id="covToggle" onchange="toggleCoverage()"><span class="toggle-slider"></span><span class="toggle-lbl">Coverage</span></label>
-    <label class="toggle admin-only-toggle" title="Toggle available rotation bars"><input type="checkbox" id="availToggle" onchange="toggleAvailable()"><span class="toggle-slider"></span><span class="toggle-lbl">Available</span></label>
+    <label class="toggle" title="Toggle available rotation bars"><input type="checkbox" id="availToggle" onchange="toggleAvailable()"><span class="toggle-slider"></span><span class="toggle-lbl">Available</span></label>
     <label class="toggle admin-only-toggle" title="Hide all mission rows"><input type="checkbox" id="hideMissionsToggle" onchange="toggleHideMissions()"><span class="toggle-slider"></span><span class="toggle-lbl">Hide Missions</span></label>
     <label class="toggle admin-only-toggle" title="Hide canceled and past missions"><input type="checkbox" id="hideCanceledPastToggle" checked onchange="toggleHideCanceledPast()"><span class="toggle-slider"></span><span class="toggle-lbl">Hide Canceled/Past</span></label>
 
