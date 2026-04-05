@@ -164,7 +164,7 @@ body.hide-available .duty-blk.available-workover { display:none!important; }
 body.hide-all-missions .m-row,
 body.hide-all-missions .sec-row { display:none; }
 .admin-only-toggle { display:none; }
-body:not(.viewer-mode):not(.simulate-mode) .admin-only-toggle { display:flex; }
+body:not(.viewer-mode) .admin-only-toggle { display:flex; }
 body.hide-mission-assign .abar { display:none!important; }
 </style>
 </head>
@@ -174,7 +174,7 @@ body.hide-mission-assign .abar { display:none!important; }
   <h1>🚁 Pilot Availability Planner</h1>
   <div class="ctrls">
     <button onclick="showWorkoverPop(event)" title="Add a rotation for a pilot" id="addRotBtn">+ Work Over</button>
-    <button id="simBtn" onclick="toggleSimulate()" title="Simulate pilot coverage without saving to sheet">🎮 Simulate</button>
+    <button id="simBtn" onclick="toggleSimulate()" title="Simulate pilot coverage without saving to sheet">🎮</button>
     <label class="toggle admin-only-toggle" title="Toggle pilot coverage on roster rows"><input type="checkbox" id="covToggle" onchange="toggleCoverage()"><span class="toggle-slider"></span><span class="toggle-lbl">Roster Coverage</span></label>
     <label class="toggle admin-only-toggle" title="Toggle pilot assignments on mission bars"><input type="checkbox" id="missionAssignToggle" onchange="toggleMissionAssign()"><span class="toggle-slider"></span><span class="toggle-lbl">Mission Assignments</span></label>
     <label class="toggle" title="Toggle available rotation bars"><input type="checkbox" id="availToggle" onchange="toggleAvailable()"><span class="toggle-slider"></span><span class="toggle-lbl">Available</span></label>
