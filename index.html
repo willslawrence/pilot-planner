@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Pilot Availability Planner v3.56 — THC H125</title>
+<title>Pilot Availability Planner v3.57 — THC H125</title>
 <style>
 :root {
   --bg: #0f1123;
@@ -159,6 +159,14 @@ body.hide-available .duty-blk.available-workover { display:none!important; }
 .pcancel { background:var(--surface2); color:var(--muted); border:1px solid var(--border)!important; }
 
 .ghost { position:fixed; pointer-events:none; z-index:100; padding:3px 10px; border-radius:5px; font-size:11px; font-weight:600; color:#fff; opacity:.85; }
+
+/* Hide missions toggles (admin-only) */
+body.hide-all-missions .m-row,
+body.hide-all-missions .sec-row { display:none; }
+body.hide-canceled-past .m-row.canceled { display:none; }
+body.hide-canceled-past .m-row.past { display:none; }
+.admin-only-toggle { display:none; }
+body:not(.viewer-mode) .admin-only-toggle { display:flex; }
 </style>
 </head>
 <body>
@@ -168,8 +176,10 @@ body.hide-available .duty-blk.available-workover { display:none!important; }
   <div class="ctrls">
     <button onclick="showWorkoverPop(event)" title="Add a rotation for a pilot" id="addRotBtn">+ Work Over</button>
     <button id="simBtn" onclick="toggleSimulate()" title="Simulate pilot coverage without saving to sheet">🎮 Simulate</button>
-    <label class="toggle" title="Toggle mission coverage on pilot rows"><input type="checkbox" id="covToggle" checked onchange="toggleCoverage()"><span class="toggle-slider"></span><span class="toggle-lbl">Coverage</span></label>
-    <label class="toggle" title="Toggle available rotation bars"><input type="checkbox" id="availToggle" onchange="toggleAvailable()"><span class="toggle-slider"></span><span class="toggle-lbl">Available</span></label>
+    <label class="toggle admin-only-toggle" title="Toggle mission coverage on pilot rows"><input type="checkbox" id="covToggle" onchange="toggleCoverage()"><span class="toggle-slider"></span><span class="toggle-lbl">Coverage</span></label>
+    <label class="toggle admin-only-toggle" title="Toggle available rotation bars"><input type="checkbox" id="availToggle" onchange="toggleAvailable()"><span class="toggle-slider"></span><span class="toggle-lbl">Available</span></label>
+    <label class="toggle admin-only-toggle" title="Hide all mission rows"><input type="checkbox" id="hideMissionsToggle" onchange="toggleHideMissions()"><span class="toggle-slider"></span><span class="toggle-lbl">Hide Missions</span></label>
+    <label class="toggle admin-only-toggle" title="Hide canceled and past missions"><input type="checkbox" id="hideCanceledPastToggle" checked onchange="toggleHideCanceledPast()"><span class="toggle-slider"></span><span class="toggle-lbl">Hide Canceled/Past</span></label>
 
     <button onclick="window.open('https://willslawrence.github.io/thc-fleet-map-v2/','_blank')" title="Open Fleet Map">🗺️ Fleet Map</button>
     <button id="commitBtn" onclick="commitChanges()" title="Save changes to Google Sheets" style="position:relative;">💾 Commit</button>
@@ -195,7 +205,7 @@ body.hide-available .duty-blk.available-workover { display:none!important; }
   <div class="leg"><input type="color" id="cc-vacation" style="width:14px;height:14px;border:none;padding:0;cursor:pointer;border-radius:2px" onchange="ROT_COLORS.vacation=this.value;saveRotColors();render()"> Vacation</div>
   <div class="leg"><input type="color" id="cc-available" style="width:14px;height:14px;border:none;padding:0;cursor:pointer;border-radius:2px" onchange="ROT_COLORS.available=this.value;saveRotColors();render()"> Available</div>
   <div class="leg"><div class="lsw" style="background:var(--yellow)"></div> Cursor</div>
-  <span id="app-version" style="font-size:10px;opacity:.5;cursor:pointer;margin-left:4px;user-select:none">v3.56</span>
+  <span id="app-version" style="font-size:10px;opacity:.5;cursor:pointer;margin-left:4px;user-select:none">v3.57</span>
   <span id="legend-hint" style="margin-left:auto;font-size:10px">Add a note about 'Vacation' or 'Availability' with the + Add Rotation button.</span>
 </div>
 
@@ -288,6 +298,16 @@ function toggleAvailable(){
 function toggleCoverage(){
   const cb=document.getElementById('covToggle');
   document.body.classList.toggle('hide-coverage',!cb.checked);
+}
+
+function toggleHideMissions(){
+  const cb=document.getElementById('hideMissionsToggle');
+  document.body.classList.toggle('hide-all-missions',cb.checked);
+}
+
+function toggleHideCanceledPast(){
+  const cb=document.getElementById('hideCanceledPastToggle');
+  document.body.classList.toggle('hide-canceled-past',cb.checked);
 }
 
 function toggleSimulate(){
@@ -1362,7 +1382,12 @@ function missionRows(m,td){
     }
   }
 
-  h+=`<div class="row m-row" style="min-height:${totalH}px"><div class="rlabel" style="min-height:${totalH}px">${labelHtml}</div><div class="rbars" style="width:${td*DW}px;height:${totalH}px;position:relative">${barsHtml}</div></div>`;
+  // Add status classes for filtering
+  const isCanceled = m.status && m.status.toLowerCase() === 'canceled';
+  const isPast = m.end < TODAY;
+  const statusClasses = `${isCanceled ? ' canceled' : ''}${isPast ? ' past' : ''}`;
+  
+  h+=`<div class="row m-row${statusClasses}" style="min-height:${totalH}px"><div class="rlabel" style="min-height:${totalH}px">${labelHtml}</div><div class="rbars" style="width:${td*DW}px;height:${totalH}px;position:relative">${barsHtml}</div></div>`;
   return h;
 }
 
@@ -1429,7 +1454,12 @@ function adHocRows(missions,td){
         }
       }
     }
-    h+=`<div class="row m-row" style="min-height:${totalH}px"><div class="rlabel" style="min-height:${totalH}px">${labelHtml}</div><div class="rbars" style="width:${td*DW}px;height:${totalH}px;position:relative">${barsHtml}</div></div>`;
+    // Add status classes for filtering — if ANY mission in lane is canceled/past, mark the whole lane
+    const anyCanceled = lane.some(m => m.status && m.status.toLowerCase() === 'canceled');
+    const anyPast = lane.some(m => m.end < TODAY);
+    const statusClasses = `${anyCanceled ? ' canceled' : ''}${anyPast ? ' past' : ''}`;
+    
+    h+=`<div class="row m-row${statusClasses}" style="min-height:${totalH}px"><div class="rlabel" style="min-height:${totalH}px">${labelHtml}</div><div class="rbars" style="width:${td*DW}px;height:${totalH}px;position:relative">${barsHtml}</div></div>`;
   }
   return h;
 }
@@ -2527,7 +2557,8 @@ async function initApp() {
 }
 
 // Start the app
-document.body.classList.add('hide-available');
+document.body.classList.add('hide-available'); // Available toggle default OFF
+document.body.classList.add('hide-canceled-past'); // Hide Canceled/Past toggle default ON
 initApp();
 </script>
 </body>
