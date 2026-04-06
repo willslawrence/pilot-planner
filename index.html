@@ -90,7 +90,7 @@ html.light .h-row { background:#fff; }
 body.viewer-mode .abar:hover .ax { display:none; }
 .sim-banner { display:none; background:linear-gradient(90deg,#009688,#00796B); color:#fff; text-align:center; font-size:11px; font-weight:600; padding:3px 0; letter-spacing:.5px; }
 body.simulate-mode .sim-banner { display:block; }
-#simBtn.active { background:var(--teal); color:#fff; border-color:var(--teal); }
+#simBtn.active { background:none; color:#fff; border-color:transparent; opacity:1!important; filter:drop-shadow(0 0 6px var(--teal)); }
 .abar-grip { position:absolute; top:0; bottom:0; width:6px; cursor:ew-resize; z-index:4; }
 .abar-grip-l { left:-2px; border-radius:4px 0 0 4px; }
 .abar-grip-r { right:-2px; border-radius:0 4px 4px 0; }
@@ -171,10 +171,9 @@ body.hide-mission-assign .abar { display:none!important; }
 <body>
 
 <div class="header">
-  <h1>🚁 Pilot Availability Planner</h1>
+  <h1>🚁 Pilot Availability Planner <button id="simBtn" onclick="toggleSimulate()" title="Simulate pilot coverage without saving to sheet" style="background:none;border:none;cursor:pointer;font-size:14px;padding:2px 4px;vertical-align:middle;opacity:.6">🎮</button></h1>
   <div class="ctrls">
     <button onclick="showWorkoverPop(event)" title="Add a rotation for a pilot" id="addRotBtn">+ Work Over</button>
-    <button id="simBtn" onclick="toggleSimulate()" title="Simulate pilot coverage without saving to sheet">🎮</button>
     <label class="toggle admin-only-toggle" title="Toggle pilot coverage on roster rows"><input type="checkbox" id="covToggle" onchange="toggleCoverage()"><span class="toggle-slider"></span><span class="toggle-lbl">Roster Coverage</span></label>
     <label class="toggle admin-only-toggle" title="Toggle pilot assignments on mission bars"><input type="checkbox" id="missionAssignToggle" onchange="toggleMissionAssign()"><span class="toggle-slider"></span><span class="toggle-lbl">Mission Assignments</span></label>
     <label class="toggle" title="Toggle available rotation bars"><input type="checkbox" id="availToggle" onchange="toggleAvailable()"><span class="toggle-slider"></span><span class="toggle-lbl">Available</span></label>
