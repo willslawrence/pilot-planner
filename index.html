@@ -1159,8 +1159,10 @@ function render(){
   // Missions by type
   const uam=MISSIONS.filter(m=>m.type==='UAM'), surv=MISSIONS.filter(m=>m.type==='Survey'), trn=MISSIONS.filter(m=>m.type==='Training'), rally=MISSIONS.filter(m=>m.type==='Rally'||m.type==='Ad Hoc');
 
-  // UAM Missions
+  // UAM Missions (including Training — shown above Bahrain Skybridge)
   html+=secRow('UAM Missions','var(--green)',td);
+  const trnUAM = trn.filter(m=>m.type==='Training');
+  for(const m of trnUAM)html+=missionRows(m,td);
   for(const m of uam)html+=missionRows(m,td);
   html+=`<div class="row" style="min-height:22px"><div class="rlabel"><span class="add-btn" onclick="addM('UAM')">+ Add UAM Mission</span></div><div class="rbars" style="width:${td*DW}px"></div></div>`;
 
