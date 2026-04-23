@@ -1211,7 +1211,7 @@ function render(){
   // Survey Missions
   html+=secRow('Survey Missions','var(--blue)',td);
   for(const m of surv)html+=missionRows(m,td);
-  if(trn.length){html+=secRow('Training','var(--orange)',td);for(const m of trn)html+=missionRows(m,td);}
+  // (Training missions rendered in UAM section above Bahrain Skybridge — see above)
   html+=`<div class="row" style="min-height:22px"><div class="rlabel"><span class="add-btn" onclick="addM('Survey')">+ Add Survey Mission</span></div><div class="rbars" style="width:${td*DW}px"></div></div>`;
 
   html+=`<div class="separator"></div>`;
