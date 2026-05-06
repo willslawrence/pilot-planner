@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Pilot Availability Planner v3.62 — THC H125</title>
+<title>Pilot Availability Planner v3.63 — THC H125</title>
 <style>
 :root {
   --bg: #0f1123;
@@ -203,7 +203,7 @@ body.hide-mission-assign .abar { display:none!important; }
   <div class="leg"><input type="color" id="cc-vacation" style="width:14px;height:14px;border:none;padding:0;cursor:pointer;border-radius:2px" onchange="ROT_COLORS.vacation=this.value;saveRotColors();render()"> Vacation</div>
   <div class="leg"><input type="color" id="cc-available" style="width:14px;height:14px;border:none;padding:0;cursor:pointer;border-radius:2px" onchange="ROT_COLORS.available=this.value;saveRotColors();render()"> Available</div>
   <div class="leg"><div class="lsw" style="background:var(--yellow)"></div> Cursor</div>
-  <span id="app-version" style="font-size:10px;opacity:.5;cursor:pointer;margin-left:4px;user-select:none">v3.62</span>
+  <span id="app-version" style="font-size:10px;opacity:.5;cursor:pointer;margin-left:4px;user-select:none">v3.63</span>
   <span id="legend-hint" style="margin-left:auto;font-size:10px">Add a note about 'Vacation' or 'Availability' with the + Add Rotation button.</span>
 </div>
 
@@ -1585,10 +1585,35 @@ function showRotPop(e, pilot, ri){
     <input type="text" id="rot-note" value="${(r.note||'').replace(/"/g,'&quot;')}" placeholder="Optional note">
   `;
   div._rotCtx = {pilot, ri, isNew:false};
+  div.tabIndex = -1;
+  div.style.outline = 'none';
   document.body.appendChild(div);
   pop=div;
   popPos(div,e);
-  setTimeout(()=>document.addEventListener('click',cPop2),10);
+  setTimeout(()=>{document.addEventListener('click',cPop2);div.focus();},10);
+  // Arrow keys shift both dates by ±1 day while popup is open.
+  // Skipped when focus is in a form control so native field editing still works.
+  const onRotKey = (ev)=>{
+    if(!div.isConnected){document.removeEventListener('keydown',onRotKey,true);return;}
+    if(ev.key!=='ArrowLeft'&&ev.key!=='ArrowRight') return;
+    const ae=document.activeElement;
+    if(ae&&ae!==div&&/^(INPUT|TEXTAREA|SELECT)$/.test(ae.tagName)) return;
+    ev.preventDefault();
+    ev.stopPropagation();
+    const delta=ev.key==='ArrowRight'?1:-1;
+    const r=pilot.rot[ri];
+    if(!r) return;
+    r.s=addDaysL(r.s,delta);
+    r.e=addDaysL(r.e,delta);
+    const sIn=div.querySelector('#rot-start');
+    const eIn=div.querySelector('#rot-end');
+    if(sIn) sIn.value=r.s;
+    if(eIn) eIn.value=r.e;
+    updateDirtyState();
+    render();
+    if(div.isConnected) div.focus();
+  };
+  document.addEventListener('keydown',onRotKey,true);
 }
 
 function showWorkoverPop(e){
