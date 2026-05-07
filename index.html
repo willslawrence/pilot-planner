@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Pilot Availability Planner v3.68 — THC H125</title>
+<title>Pilot Availability Planner v3.69 — THC H125</title>
 <style>
 :root {
   --bg: #0f1123;
@@ -219,7 +219,7 @@ body.has-pilot-focus .p-row.pilot-focused .pname { font-weight:700; color:var(--
   <div class="leg"><input type="color" id="cc-training" style="width:14px;height:14px;border:none;padding:0;cursor:pointer;border-radius:2px" onchange="ROT_COLORS.training=this.value;saveRotColors();render()"> Training</div>
   <div class="leg"><input type="color" id="cc-available" style="width:14px;height:14px;border:none;padding:0;cursor:pointer;border-radius:2px" onchange="ROT_COLORS.available=this.value;saveRotColors();render()"> Available</div>
   <div class="leg"><div class="lsw" style="background:var(--yellow)"></div> Cursor</div>
-  <span id="app-version" style="font-size:10px;opacity:.5;cursor:pointer;margin-left:4px;user-select:none">v3.68</span>
+  <span id="app-version" style="font-size:10px;opacity:.5;cursor:pointer;margin-left:4px;user-select:none">v3.69</span>
   <span id="legend-hint" style="margin-left:auto;font-size:10px">Add a note about 'Vacation' or 'Availability' with the + Add Rotation button.</span>
 </div>
 
@@ -1610,10 +1610,16 @@ function showRotPop(e, pilot, ri){
       <button class="pcancel" onclick="cPop()">Cancel</button>
       <button class="psave" onclick="saveRotPop()">Save</button>
     </div>
-    <label>Start Date</label>
-    <input type="date" id="rot-start" value="${r.s}">
-    <label>End Date</label>
-    <input type="date" id="rot-end" value="${r.e}">
+    <div style="display:flex;gap:6px">
+      <div style="flex:1;min-width:0">
+        <label>Start Date</label>
+        <input type="date" id="rot-start" value="${r.s}">
+      </div>
+      <div style="flex:1;min-width:0">
+        <label>End Date</label>
+        <input type="date" id="rot-end" value="${r.e}">
+      </div>
+    </div>
     <label>Status</label>
     <select id="rot-status">
       <option value="ON"${r.st==='ON'?' selected':''}>ON</option>
@@ -1624,7 +1630,7 @@ function showRotPop(e, pilot, ri){
       <option value="TRAINING"${r.st==='TRAINING'?' selected':''}>TRAINING</option>
     </select>
     <label>Note</label>
-    <input type="text" id="rot-note" value="${(r.note||'').replace(/"/g,'&quot;')}" placeholder="Optional note">
+    <textarea id="rot-note" rows="3" placeholder="Optional note" style="width:100%;resize:vertical;font-family:inherit">${(r.note||'').replace(/</g,'&lt;')}</textarea>
   `;
   div._rotCtx = {pilot, ri, isNew:false};
   div.tabIndex = -1;
@@ -1737,10 +1743,16 @@ function showAddRotPop(e, pilotName){
       <button class="pcancel" onclick="cPop()">Cancel</button>
       <button class="psave" onclick="saveRotPop()">Save</button>
     </div>
-    <label>Start Date</label>
-    <input type="date" id="rot-start" value="${ds}">
-    <label>End Date</label>
-    <input type="date" id="rot-end" value="${de}">
+    <div style="display:flex;gap:6px">
+      <div style="flex:1;min-width:0">
+        <label>Start Date</label>
+        <input type="date" id="rot-start" value="${ds}">
+      </div>
+      <div style="flex:1;min-width:0">
+        <label>End Date</label>
+        <input type="date" id="rot-end" value="${de}">
+      </div>
+    </div>
     <label>Status</label>
     <select id="rot-status">
       <option value="ON">ON</option>
@@ -1750,6 +1762,8 @@ function showAddRotPop(e, pilotName){
       <option value="VACATION_EXTRA">VACATION</option>
       <option value="TRAINING">TRAINING</option>
     </select>
+    <label>Note</label>
+    <textarea id="rot-note" rows="3" placeholder="Optional note" style="width:100%;resize:vertical;font-family:inherit"></textarea>
   `;
   div._rotCtx = {pilot, ri:-1, isNew:true};
   document.body.appendChild(div);
