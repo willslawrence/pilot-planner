@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Pilot Availability Planner v3.67 — THC H125</title>
+<title>Pilot Availability Planner v3.68 — THC H125</title>
 <style>
 :root {
   --bg: #0f1123;
@@ -116,8 +116,8 @@ body.simulate-mode .sim-banner { display:block; }
 .rot-center.warn { color:#ff4444; font-size:10px; text-shadow:0 0 4px rgba(255,0,0,.5); }
 .duty-blk.on { opacity:.55; z-index:1; }
 .duty-blk.off { opacity:.22; z-index:1; }
-.duty-blk.workover { opacity:.55; z-index:2; background-image:repeating-linear-gradient(45deg,transparent,transparent 4px,rgba(66,165,245,.4) 4px,rgba(66,165,245,.4) 8px); }
-.duty-blk.vacation-extra { opacity:.55; z-index:2; background-image:repeating-linear-gradient(45deg,transparent,transparent 4px,rgba(255,255,255,.15) 4px,rgba(255,255,255,.15) 8px); }
+.duty-blk.workover { opacity:.55; z-index:2; top:5px!important; bottom:5px!important; height:auto!important; background-image:repeating-linear-gradient(45deg,transparent,transparent 4px,rgba(66,165,245,.4) 4px,rgba(66,165,245,.4) 8px); }
+.duty-blk.vacation-extra { opacity:.55; z-index:2; top:5px!important; bottom:5px!important; height:auto!important; background-image:repeating-linear-gradient(45deg,transparent,transparent 4px,rgba(255,255,255,.15) 4px,rgba(255,255,255,.15) 8px); }
 .duty-blk.available-workover { opacity:1; z-index:2; top:5px!important; bottom:5px!important; height:auto!important; background-image:repeating-linear-gradient(45deg,transparent,transparent 4px,rgba(255,255,255,.15) 4px,rgba(255,255,255,.15) 8px); border-radius:3px; }
 
 .pa-block { position:absolute; top:7px; height:13px; border-radius:3px; display:flex; align-items:center; padding:0 4px; font-size:7px; font-weight:700; color:#fff; z-index:3; overflow:hidden; white-space:nowrap; text-overflow:ellipsis; border:1px solid rgba(255,255,255,.25); cursor:pointer; letter-spacing:.3px; }
@@ -217,7 +217,7 @@ body.has-pilot-focus .p-row.pilot-focused .pname { font-weight:700; color:var(--
   <div class="leg"><input type="color" id="cc-vacation" style="width:14px;height:14px;border:none;padding:0;cursor:pointer;border-radius:2px" onchange="ROT_COLORS.vacation=this.value;saveRotColors();render()"> Vacation</div>
   <div class="leg"><input type="color" id="cc-available" style="width:14px;height:14px;border:none;padding:0;cursor:pointer;border-radius:2px" onchange="ROT_COLORS.available=this.value;saveRotColors();render()"> Available</div>
   <div class="leg"><div class="lsw" style="background:var(--yellow)"></div> Cursor</div>
-  <span id="app-version" style="font-size:10px;opacity:.5;cursor:pointer;margin-left:4px;user-select:none">v3.67</span>
+  <span id="app-version" style="font-size:10px;opacity:.5;cursor:pointer;margin-left:4px;user-select:none">v3.68</span>
   <span id="legend-hint" style="margin-left:auto;font-size:10px">Add a note about 'Vacation' or 'Availability' with the + Add Rotation button.</span>
 </div>
 
