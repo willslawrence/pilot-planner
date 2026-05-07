@@ -240,6 +240,12 @@ let isDirty = false;
 let adminMode = false;
 let simulateMode = false;
 function canEditAssignments(){ return adminMode || simulateMode; }
+function isCoverageHiddenForMission(m){
+  if(adminMode || simulateMode) return false;
+  if(!m || !m.start) return false;
+  const today = F(new Date());
+  return dB(D(today), D(m.start)) > 30;
+}
 let versionClickCount = 0;
 let versionClickTimer = null;
 
@@ -299,6 +305,17 @@ function applyModes(){
   });
   // Simulate button highlight
   document.getElementById('simBtn')?.classList.toggle('active', simulateMode);
+  // Coverage visibility: viewer mode auto-shows coverage (per-mission 30-day filter at render time);
+  // admin/simulate mirror their toggle checkbox state.
+  if(!adminMode && !simulateMode){
+    document.body.classList.remove('hide-coverage');
+    document.body.classList.remove('hide-mission-assign');
+  } else {
+    const covEl=document.getElementById('covToggle');
+    if(covEl) document.body.classList.toggle('hide-coverage', !covEl.checked);
+    const masEl=document.getElementById('missionAssignToggle');
+    if(masEl) document.body.classList.toggle('hide-mission-assign', !masEl.checked);
+  }
 }
 function applyAdminMode(){ applyModes(); }
 
@@ -1369,7 +1386,7 @@ function missionRows(m,td){
         subLane[ai] = lane0Taken ? 1 : 0;
       }
     }
-    for(let ai=0;ai<arr.length;ai++){
+    if(!isCoverageHiddenForMission(m)) for(let ai=0;ai<arr.length;ai++){
       const a=arr[ai];
       const p=PILOTS.find(pp=>pp.name===a.pilot);
       const al=Math.max(0,dO(D(a.start)))*DW, aw=Math.max(14,(Math.min(td,dO(D(a.end))+1)-Math.max(0,dO(D(a.start))))*DW);
@@ -1534,6 +1551,8 @@ function pilotRow(p,td,ds){
     }
     if(cur)groups.push(cur);
     for(const a of groups){
+      const _m=MISSIONS.find(mm=>mm.id===a.mid);
+      if(isCoverageHiddenForMission(_m)) continue;
       const al=Math.max(0,dO(D(a.start)))*DW, aw=Math.max(14,(Math.min(td,dO(D(a.end))+1)-Math.max(0,dO(D(a.start))))*DW);
       bars+=`<div class="pa-block" data-pa-pilot="${p.name}" data-pa-mid="${a.mid}" data-pa-hi="${a.hi}" data-pa-start="${a.start}" data-pa-end="${a.end}" data-pa-mname="${a.mname}" style="left:${al}px;width:${aw}px;background:${a.color}CC">${a.mname}</div>`;
     }
@@ -1648,10 +1667,16 @@ function showWorkoverPop(e){
     </div>
     <label>Pilot</label>
     <select id="wo-pilot" style="width:100%">${opts}</select>
-    <label>Start Date</label>
-    <input type="date" id="wo-start" value="${ds}">
-    <label>End Date</label>
-    <input type="date" id="wo-end" value="${de}">
+    <div style="display:flex;gap:6px">
+      <div style="flex:1;min-width:0">
+        <label>Start Date</label>
+        <input type="date" id="wo-start" value="${ds}">
+      </div>
+      <div style="flex:1;min-width:0">
+        <label>End Date</label>
+        <input type="date" id="wo-end" value="${de}">
+      </div>
+    </div>
     ${adminMode?'':`<label>Note (required)</label>
     <textarea id="wo-note" rows="5" placeholder="Vacation, work over, available to work, add notes here for context to the request." style="width:100%;resize:vertical;font-family:inherit"></textarea>`}
   `;
@@ -1911,6 +1936,7 @@ function drawHandoffLines(){
 
   let paths='';
   for(const m of MISSIONS){
+    if(isCoverageHiddenForMission(m)) continue;
     for(let hi=0;hi<m.hc;hi++){
       const arr=(asgn[sk(m.id,hi)]||[]).slice().sort((a,b)=>a.start.localeCompare(b.start));
       for(let i=0;i<arr.length-1;i++){
