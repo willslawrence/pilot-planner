@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Pilot Availability Planner v3.70 — THC H125</title>
+<title>Pilot Availability Planner v3.71 — THC H125</title>
 <style>
 :root {
   --bg: #0f1123;
@@ -219,7 +219,7 @@ body.has-pilot-focus .p-row.pilot-focused .pname { font-weight:700; color:var(--
   <div class="leg"><input type="color" id="cc-training" style="width:14px;height:14px;border:none;padding:0;cursor:pointer;border-radius:2px" onchange="ROT_COLORS.training=this.value;saveRotColors();render()"> Training</div>
   <div class="leg"><input type="color" id="cc-available" style="width:14px;height:14px;border:none;padding:0;cursor:pointer;border-radius:2px" onchange="ROT_COLORS.available=this.value;saveRotColors();render()"> Available</div>
   <div class="leg"><div class="lsw" style="background:var(--yellow)"></div> Cursor</div>
-  <span id="app-version" style="font-size:10px;opacity:.5;cursor:pointer;margin-left:4px;user-select:none">v3.70</span>
+  <span id="app-version" style="font-size:10px;opacity:.5;cursor:pointer;margin-left:4px;user-select:none">v3.71</span>
   <span id="legend-hint" style="margin-left:auto;font-size:10px">Add a note about 'Vacation' or 'Availability' with the + Add Rotation button.</span>
 </div>
 
@@ -242,12 +242,21 @@ let isDirty = false;
 let adminMode = false;
 let simulateMode = false;
 function canEditAssignments(){ return adminMode || simulateMode; }
-// In viewer mode, coverage whose start is more than 45 days from today is hidden.
+// "Viewer mode" = neither admin nor simulate. The 45-day coverage filter
+// is the ONLY caller of isAfterCoverageWindow, so anything that isn't viewer
+// mode sees all coverage regardless.
+function isViewerMode(){ return !adminMode && !simulateMode; }
+// Pure date predicate: does this object's .start fall more than 45 days
+// after today? No mode logic — call sites gate on isViewerMode() themselves.
 // Accepts any object with a YYYY-MM-DD .start (mission OR individual assignment).
-function isCoverageHiddenForMission(o){
-  if(adminMode || simulateMode) return false;
+function isAfterCoverageWindow(o){
   if(!o || !o.start) return false;
   return dB(D(F(new Date())), D(o.start)) > 45;
+}
+// Back-compat shim: existing call sites kept compiling. Behaves like the old
+// isCoverageHiddenForMission but with the mode check made explicit.
+function isCoverageHiddenForMission(o){
+  return isViewerMode() && isAfterCoverageWindow(o);
 }
 let versionClickCount = 0;
 let versionClickTimer = null;
@@ -1391,9 +1400,10 @@ function missionRows(m,td){
         subLane[ai] = lane0Taken ? 1 : 0;
       }
     }
-    if(!isCoverageHiddenForMission(m)) for(let ai=0;ai<arr.length;ai++){
+    const _vm=isViewerMode(); // capture once per mission so all skips are consistent
+    if(!_vm || !isAfterCoverageWindow(m)) for(let ai=0;ai<arr.length;ai++){
       const a=arr[ai];
-      if(isCoverageHiddenForMission(a)) continue;
+      if(_vm && isAfterCoverageWindow(a)) continue;
       const p=PILOTS.find(pp=>pp.name===a.pilot);
       const al=Math.max(0,dO(D(a.start)))*DW, aw=Math.max(14,(Math.min(td,dO(D(a.end))+1)-Math.max(0,dO(D(a.start))))*DW);
       const off=p?!isOn(p,a.start):false;
@@ -1473,8 +1483,9 @@ function adHocRows(missions,td){
         if(hi>0) barsHtml+=`<div style="position:absolute;top:${laneTop}px;left:${ml}px;width:${mw}px;height:1px;background:${m.color};opacity:.2;pointer-events:none;z-index:1"></div>`;
         barsHtml+=`<div class="h-drop" data-mid="${m.id}" data-hi="${hi}" style="position:absolute;top:${laneTop}px;left:${ml}px;width:${mw}px;height:${heliH}px;z-index:0"></div>`;
         const arr=gA(m.id,hi);
-        if(!isCoverageHiddenForMission(m)) for(const a of arr){
-          if(isCoverageHiddenForMission(a)) continue;
+        const _vm2=isViewerMode();
+        if(!_vm2 || !isAfterCoverageWindow(m)) for(const a of arr){
+          if(_vm2 && isAfterCoverageWindow(a)) continue;
           const p=PILOTS.find(pp=>pp.name===a.pilot);
           const al=Math.max(0,dO(D(a.start)))*DW, aw=Math.max(14,(Math.min(td,dO(D(a.end))+1)-Math.max(0,dO(D(a.start))))*DW);
           const off=p?!isOn(p,a.start):false;
@@ -1557,8 +1568,9 @@ function pilotRow(p,td,ds){
       }
     }
     if(cur)groups.push(cur);
+    const _vm3=isViewerMode();
     for(const a of groups){
-      if(isCoverageHiddenForMission(a)) continue;
+      if(_vm3 && isAfterCoverageWindow(a)) continue;
       const al=Math.max(0,dO(D(a.start)))*DW, aw=Math.max(14,(Math.min(td,dO(D(a.end))+1)-Math.max(0,dO(D(a.start))))*DW);
       bars+=`<div class="pa-block" data-pa-pilot="${p.name}" data-pa-mid="${a.mid}" data-pa-hi="${a.hi}" data-pa-start="${a.start}" data-pa-end="${a.end}" data-pa-mname="${a.mname}" style="left:${al}px;width:${aw}px;background:${a.color}CC">${a.mname}</div>`;
     }
@@ -1957,15 +1969,16 @@ function drawHandoffLines(){
   });
 
   let paths='';
+  const _vm4=isViewerMode();
   for(const m of MISSIONS){
-    if(isCoverageHiddenForMission(m)) continue;
+    if(_vm4 && isAfterCoverageWindow(m)) continue;
     for(let hi=0;hi<m.hc;hi++){
       const arr=(asgn[sk(m.id,hi)]||[]).slice().sort((a,b)=>a.start.localeCompare(b.start));
       for(let i=0;i<arr.length-1;i++){
         const a1=arr[i], a2=arr[i+1];
         if(a1.pilot===a2.pilot) continue;
         if(m.type==='Rally'||m.type==='Ad Hoc') continue; // No handoff lines for Ad Hoc missions
-        if(isCoverageHiddenForMission(a2)) continue;
+        if(_vm4 && isAfterCoverageWindow(a2)) continue;
         const gap=dB(D(a1.end),D(a2.start));
         if(gap>1) continue;
 
