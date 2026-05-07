@@ -240,12 +240,12 @@ let isDirty = false;
 let adminMode = false;
 let simulateMode = false;
 function canEditAssignments(){ return adminMode || simulateMode; }
-// In viewer mode, coverage whose start is more than 30 days from today is hidden.
+// In viewer mode, coverage whose start is more than 45 days from today is hidden.
 // Accepts any object with a YYYY-MM-DD .start (mission OR individual assignment).
 function isCoverageHiddenForMission(o){
   if(adminMode || simulateMode) return false;
   if(!o || !o.start) return false;
-  return dB(D(F(new Date())), D(o.start)) > 30;
+  return dB(D(F(new Date())), D(o.start)) > 45;
 }
 let versionClickCount = 0;
 let versionClickTimer = null;
