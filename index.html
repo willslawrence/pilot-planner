@@ -118,6 +118,7 @@ body.simulate-mode .sim-banner { display:block; }
 .duty-blk.off { opacity:.22; z-index:1; }
 .duty-blk.workover { opacity:.55; z-index:2; top:5px!important; bottom:5px!important; height:auto!important; background-image:repeating-linear-gradient(45deg,transparent,transparent 4px,rgba(66,165,245,.4) 4px,rgba(66,165,245,.4) 8px); }
 .duty-blk.vacation-extra { opacity:.55; z-index:2; top:5px!important; bottom:5px!important; height:auto!important; background-image:repeating-linear-gradient(45deg,transparent,transparent 4px,rgba(255,255,255,.15) 4px,rgba(255,255,255,.15) 8px); }
+.duty-blk.training { opacity:.55; z-index:2; top:5px!important; bottom:5px!important; height:auto!important; background-image:repeating-linear-gradient(45deg,transparent,transparent 4px,rgba(255,255,255,.15) 4px,rgba(255,255,255,.15) 8px); }
 .duty-blk.available-workover { opacity:1; z-index:2; top:5px!important; bottom:5px!important; height:auto!important; background-image:repeating-linear-gradient(45deg,transparent,transparent 4px,rgba(255,255,255,.15) 4px,rgba(255,255,255,.15) 8px); border-radius:3px; }
 
 .pa-block { position:absolute; top:7px; height:13px; border-radius:3px; display:flex; align-items:center; padding:0 4px; font-size:7px; font-weight:700; color:#fff; z-index:3; overflow:hidden; white-space:nowrap; text-overflow:ellipsis; border:1px solid rgba(255,255,255,.25); cursor:pointer; letter-spacing:.3px; }
@@ -215,6 +216,7 @@ body.has-pilot-focus .p-row.pilot-focused .pname { font-weight:700; color:var(--
   <div class="leg"><input type="color" id="cc-off" style="width:14px;height:14px;border:none;padding:0;cursor:pointer;border-radius:2px" onchange="ROT_COLORS.off=this.value;saveRotColors();render()"> Off</div>
   <div class="leg"><input type="color" id="cc-workover" style="width:14px;height:14px;border:none;padding:0;cursor:pointer;border-radius:2px" onchange="ROT_COLORS.workover=this.value;saveRotColors();render()"> Work Over</div>
   <div class="leg"><input type="color" id="cc-vacation" style="width:14px;height:14px;border:none;padding:0;cursor:pointer;border-radius:2px" onchange="ROT_COLORS.vacation=this.value;saveRotColors();render()"> Vacation</div>
+  <div class="leg"><input type="color" id="cc-training" style="width:14px;height:14px;border:none;padding:0;cursor:pointer;border-radius:2px" onchange="ROT_COLORS.training=this.value;saveRotColors();render()"> Training</div>
   <div class="leg"><input type="color" id="cc-available" style="width:14px;height:14px;border:none;padding:0;cursor:pointer;border-radius:2px" onchange="ROT_COLORS.available=this.value;saveRotColors();render()"> Available</div>
   <div class="leg"><div class="lsw" style="background:var(--yellow)"></div> Cursor</div>
   <span id="app-version" style="font-size:10px;opacity:.5;cursor:pointer;margin-left:4px;user-select:none">v3.68</span>
@@ -610,7 +612,7 @@ function buildRotationsForPilot(pilotName, rotations, isManagement) {
   // If the sheet has explicit rotation blocks (ON/OFF/WORKOVER/VACATION_EXTRA),
   // use them directly — these are committed edits from the Planner.
   const hasExplicitBlocks = pilotRotations.some(r => 
-    r.type === 'ON' || r.type === 'WORKOVER' || r.type === 'VACATION_EXTRA' || r.type === 'AVAILABLE_WORKOVER'
+    r.type === 'ON' || r.type === 'WORKOVER' || r.type === 'VACATION_EXTRA' || r.type === 'AVAILABLE_WORKOVER' || r.type === 'TRAINING'
   );
   
   if (hasExplicitBlocks) {
@@ -1003,13 +1005,14 @@ let sel=new Date(), pop=null, focusedPilot=null;
 
 function isOn(p,ds){for(const r of p.rot)if(ds>=r.s&&ds<=r.e&&(r.st==='ON'||r.st==='WORKOVER'||r.st==='AVAILABLE_WORKOVER'))return true;return false;}
 function isVacExtra(p,ds){for(const r of p.rot)if(ds>=r.s&&ds<=r.e&&r.st==='VACATION_EXTRA')return true;return false;}
+function isTraining(p,ds){for(const r of p.rot)if(ds>=r.s&&ds<=r.e&&r.st==='TRAINING')return true;return false;}
 function getRotStatus(p,ds){for(const r of p.rot)if(ds>=r.s&&ds<=r.e)return r.st;return 'OFF';}
 function pg(p){if(p.temp) return 'temp';if(p.mg) return 'mg';const cats=p.quals.join(' ');const u=cats.includes('UAM'),s=cats.includes('Survey');return u&&s?'both':u?'uam':'survey';}
 const PILOT_COLORS=JSON.parse(localStorage.getItem('pp_pilotColors')||'null')||{uam:'#87CEEB',both:'#1a3a6b',survey:'#FF8C00',mg:'#9CA3AF',temp:'#AB47BC'};
 function gc(g){return PILOT_COLORS[g]||'#888';}
 function savePilotColors(){localStorage.setItem('pp_pilotColors',JSON.stringify(PILOT_COLORS));}
-const ROT_COLORS=JSON.parse(localStorage.getItem('pp_rotColors')||'null')||{on:'#10B981',off:'#F87171',workover:'#42A5F5',vacation:'#F59E0B',available:'#F472B6'};
-function rotColor(st){return st==='WORKOVER'?ROT_COLORS.workover:st==='VACATION_EXTRA'?ROT_COLORS.vacation:st==='AVAILABLE_WORKOVER'?ROT_COLORS.available:ROT_COLORS.on;}
+const ROT_COLORS=JSON.parse(localStorage.getItem('pp_rotColors')||'null')||{on:'#10B981',off:'#F87171',workover:'#42A5F5',vacation:'#F59E0B',available:'#F472B6',training:'#000000'};
+function rotColor(st){return st==='WORKOVER'?ROT_COLORS.workover:st==='VACATION_EXTRA'?ROT_COLORS.vacation:st==='AVAILABLE_WORKOVER'?ROT_COLORS.available:st==='TRAINING'?ROT_COLORS.training:ROT_COLORS.on;}
 function saveRotColors(){localStorage.setItem('pp_rotColors',JSON.stringify(ROT_COLORS));}
 
 function sk(m,h){return m+'_'+h;}
@@ -1259,6 +1262,7 @@ function render(){
   // Hover cursor line
   html+=`<div id="hover-cur" style="position:absolute;top:0;bottom:0;width:3px;background:rgba(255,214,0,.6);z-index:14;pointer-events:none;display:none;border-radius:1px"></div>`;
   html+=`<div id="hover-lbl" style="position:absolute;z-index:16;font-size:8px;background:rgba(255,214,0,.6);color:#000;padding:1px 4px;border-radius:2px;pointer-events:none;white-space:nowrap;font-weight:600;bottom:2px;display:none"></div>`;
+  html+=`<div id="hover-lbl-top" style="position:absolute;z-index:16;font-size:8px;background:rgba(255,214,0,.6);color:#000;padding:1px 4px;border-radius:2px;pointer-events:none;white-space:nowrap;font-weight:600;top:2px;display:none"></div>`;
 
   // Past days shading + Today line
   const todayOff=dO(new Date());
@@ -1293,6 +1297,7 @@ function render(){
   const ccOff=document.getElementById('cc-off');if(ccOff)ccOff.value=ROT_COLORS.off;
   const ccWo=document.getElementById('cc-workover');if(ccWo)ccWo.value=ROT_COLORS.workover;
   const ccVac=document.getElementById('cc-vacation');if(ccVac)ccVac.value=ROT_COLORS.vacation;
+  const ccTraining=document.getElementById('cc-training');if(ccTraining)ccTraining.value=ROT_COLORS.training||'#000000';
   const ccAvail=document.getElementById('cc-available');if(ccAvail)ccAvail.value=ROT_COLORS.available;
   saveData();
   setupCursor();
@@ -1499,7 +1504,7 @@ function pilotRow(p,td,ds){
     const rl=Math.max(0,rawL)*DW, rw=Math.max(0,(Math.min(td,rawR+1)-Math.max(0,rawL))*DW);
     if(rw<=0) continue;
 
-    if(r.st==='ON'||r.st==='WORKOVER'||r.st==='VACATION_EXTRA'||r.st==='AVAILABLE_WORKOVER'){
+    if(r.st==='ON'||r.st==='WORKOVER'||r.st==='VACATION_EXTRA'||r.st==='AVAILABLE_WORKOVER'||r.st==='TRAINING'){
       const sLabel=r.s.slice(5);
       const eLabel=r.e.slice(5);
       // Calculate week count
@@ -1509,7 +1514,7 @@ function pilotRow(p,td,ds){
       const isStandard = days===42; // exactly 6 weeks
       const weekLabel = isStandard ? '6W' : (remDays===0 ? fullWeeks+'W' : fullWeeks+'W+'+remDays+'D');
       const centerCls = isStandard ? 'rot-center' : 'rot-center warn';
-      const blkCls = r.st==='WORKOVER' ? 'duty-blk workover' : r.st==='VACATION_EXTRA' ? 'duty-blk vacation-extra' : r.st==='AVAILABLE_WORKOVER' ? 'duty-blk available-workover' : 'duty-blk on';
+      const blkCls = r.st==='WORKOVER' ? 'duty-blk workover' : r.st==='VACATION_EXTRA' ? 'duty-blk vacation-extra' : r.st==='AVAILABLE_WORKOVER' ? 'duty-blk available-workover' : r.st==='TRAINING' ? 'duty-blk training' : 'duty-blk on';
       const bgColor = rotColor(r.st);
       const label = weekLabel;
       const rotTip=r.note?`${p.name} — ${r.st.replace('_',' ')}\n${r.note}`.replace(/"/g,'&quot;'):'';
@@ -1616,6 +1621,7 @@ function showRotPop(e, pilot, ri){
       <option value="WORKOVER"${r.st==='WORKOVER'?' selected':''}>WORKOVER</option>
       <option value="AVAILABLE_WORKOVER"${r.st==='AVAILABLE_WORKOVER'?' selected':''}>AVAILABLE</option>
       <option value="VACATION_EXTRA"${r.st==='VACATION_EXTRA'?' selected':''}>VACATION</option>
+      <option value="TRAINING"${r.st==='TRAINING'?' selected':''}>TRAINING</option>
     </select>
     <label>Note</label>
     <input type="text" id="rot-note" value="${(r.note||'').replace(/"/g,'&quot;')}" placeholder="Optional note">
@@ -1742,6 +1748,7 @@ function showAddRotPop(e, pilotName){
       <option value="WORKOVER" selected>WORKOVER</option>
       <option value="AVAILABLE_WORKOVER">AVAILABLE</option>
       <option value="VACATION_EXTRA">VACATION</option>
+      <option value="TRAINING">TRAINING</option>
     </select>
   `;
   div._rotCtx = {pilot, ri:-1, isNew:true};
@@ -2003,6 +2010,7 @@ function setupHoverCursor(){
   if(!wrap) return;
   const hLine=document.getElementById('hover-cur');
   const hLbl=document.getElementById('hover-lbl');
+  const hLblTop=document.getElementById('hover-lbl-top');
   if(!hLine||!hLbl) return;
   const MN=["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
   let lastHoverDate='';
@@ -2041,6 +2049,11 @@ function setupHoverCursor(){
     hLbl.style.left=(px+3)+'px';
     hLbl.style.display='';
     hLbl.textContent=hDate.getDate()+' '+MN[hDate.getMonth()];
+    if(hLblTop){
+      hLblTop.style.left=(px+3)+'px';
+      hLblTop.style.display='';
+      hLblTop.textContent=hDate.getDate()+' '+MN[hDate.getMonth()];
+    }
     if(ds!==lastHoverDate){
       lastHoverDate=ds;
       updatePilotLabels(ds);
@@ -2049,6 +2062,7 @@ function setupHoverCursor(){
   wrap.addEventListener('mouseleave',()=>{
     hLine.style.display='none';
     hLbl.style.display='none';
+    if(hLblTop) hLblTop.style.display='none';
     // Reset to selected date
     lastHoverDate='';
     updatePilotLabels(F(sel));
