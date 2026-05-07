@@ -1,0 +1,60 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  syntax:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Validate JS syntax in index.html
+        run: |
+          node -e '
+            const fs = require("fs");
+            const html = fs.readFileSync("index.html", "utf8");
+            const re = /<script(?:\s[^>]*)?>([\s\S]*?)<\/script>/g;
+            let m, i = 0, errors = 0;
+            while ((m = re.exec(html))) {
+              const code = m[1];
+              if (!code.trim()) continue;
+              try {
+                new Function(code);
+                console.log(`script[${i}]: OK (${code.length} chars)`);
+              } catch (err) {
+                console.error(`script[${i}]: SYNTAX ERROR — ${err.message}`);
+                errors++;
+              }
+              i++;
+            }
+            if (errors) process.exit(1);
+            console.log(`Validated ${i} script block(s)`);
+          '
+
+      - name: Smoke-check HTML structure
+        run: |
+          node -e '
+            const fs = require("fs");
+            const html = fs.readFileSync("index.html", "utf8");
+            const checks = [
+              ["DOCTYPE", /<!DOCTYPE html>/i],
+              ["app-version span", /id="app-version"/],
+              ["render function", /function\s+render\s*\(/],
+              ["applyModes function", /function\s+applyModes\s*\(/],
+              ["coverage filter", /isAfterCoverageWindow|isCoverageHiddenForMission/],
+            ];
+            let failed = 0;
+            for (const [name, re] of checks) {
+              if (re.test(html)) {
+                console.log(`OK   ${name}`);
+              } else {
+                console.error(`FAIL ${name}`);
+                failed++;
+              }
+            }
+            if (failed) process.exit(1);
+          '
