@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Pilot Availability Planner v3.71 — THC H125</title>
+<title>Pilot Availability Planner v3.73 — THC H125</title>
 <style>
 :root {
   --bg: #0f1123;
@@ -189,8 +189,8 @@ body.has-pilot-focus .p-row.pilot-focused .pname { font-weight:700; color:var(--
   <h1>🚁 Pilot Availability Planner <button id="simBtn" onclick="toggleSimulate()" title="Simulate pilot coverage without saving to sheet" style="background:none;border:none;cursor:pointer;font-size:14px;padding:2px 4px;vertical-align:middle;opacity:.6">🎮</button></h1>
   <div class="ctrls">
     <button onclick="showWorkoverPop(event)" title="Add a rotation for a pilot" id="addRotBtn">+ Work Over</button>
-    <label class="toggle admin-only-toggle" title="Toggle pilot coverage on roster rows"><input type="checkbox" id="covToggle" onchange="toggleCoverage()"><span class="toggle-slider"></span><span class="toggle-lbl">Roster Coverage</span></label>
-    <label class="toggle admin-only-toggle" title="Toggle pilot assignments on mission bars"><input type="checkbox" id="missionAssignToggle" onchange="toggleMissionAssign()"><span class="toggle-slider"></span><span class="toggle-lbl">Mission Assignments</span></label>
+    <label class="toggle admin-only-toggle" title="Toggle pilot coverage on roster rows"><input type="checkbox" id="covToggle" checked onchange="toggleCoverage()"><span class="toggle-slider"></span><span class="toggle-lbl">Roster Coverage</span></label>
+    <label class="toggle admin-only-toggle" title="Toggle pilot assignments on mission bars"><input type="checkbox" id="missionAssignToggle" checked onchange="toggleMissionAssign()"><span class="toggle-slider"></span><span class="toggle-lbl">Mission Assignments</span></label>
     <label class="toggle" title="Toggle available rotation bars"><input type="checkbox" id="availToggle" onchange="toggleAvailable()"><span class="toggle-slider"></span><span class="toggle-lbl">Available</span></label>
     <label class="toggle admin-only-toggle" title="Hide all mission rows"><input type="checkbox" id="hideMissionsToggle" onchange="toggleHideMissions()"><span class="toggle-slider"></span><span class="toggle-lbl">Hide Missions</span></label>
 
@@ -219,7 +219,7 @@ body.has-pilot-focus .p-row.pilot-focused .pname { font-weight:700; color:var(--
   <div class="leg"><input type="color" id="cc-training" style="width:14px;height:14px;border:none;padding:0;cursor:pointer;border-radius:2px" onchange="ROT_COLORS.training=this.value;saveRotColors();render()"> Training</div>
   <div class="leg"><input type="color" id="cc-available" style="width:14px;height:14px;border:none;padding:0;cursor:pointer;border-radius:2px" onchange="ROT_COLORS.available=this.value;saveRotColors();render()"> Available</div>
   <div class="leg"><div class="lsw" style="background:var(--yellow)"></div> Cursor</div>
-  <span id="app-version" style="font-size:10px;opacity:.5;cursor:pointer;margin-left:4px;user-select:none">v3.71</span>
+  <span id="app-version" style="font-size:10px;opacity:.5;cursor:pointer;margin-left:4px;user-select:none">v3.73</span>
   <span id="legend-hint" style="margin-left:auto;font-size:10px">Add a note about 'Vacation' or 'Availability' with the + Add Rotation button.</span>
 </div>
 
@@ -274,6 +274,7 @@ function initAdminToggle(){
       adminMode=!adminMode;
       if(adminMode) simulateMode=false;
       applyModes();
+      render();
       showMessage(adminMode?'🔓 Admin mode ON':'🔒 Admin mode OFF','info');
     }
   });
@@ -355,6 +356,7 @@ function toggleSimulate(){
   simulateMode=!simulateMode;
   if(simulateMode) adminMode=false;
   applyModes();
+  render();
   showMessage(simulateMode?'🎮 Simulation mode ON — changes are local only':'🎮 Simulation mode OFF','info');
 }
 
@@ -994,7 +996,14 @@ function tD(){ return dB(T0,T1); }
 
 
 // ====== CONSTANTS ======
-const T0=new Date(2026,0,1), T1=new Date(2027,11,31), DW=17, LW=160;
+const T0=new Date(2026,0,1), T1=new Date(2027,11,31), DW=17;
+// LW (label column width) must match the .rlabel CSS width at the active viewport size.
+// Mobile (<= 768px) overrides .rlabel to 110px (see media query); desktop is 160px.
+let LW = window.innerWidth <= 768 ? 110 : 160;
+window.addEventListener('resize', ()=>{
+  const newLW = window.innerWidth <= 768 ? 110 : 160;
+  if(newLW !== LW){ LW = newLW; render(); }
+});
 
 function updateFirstNameCount() {
   const _fnCount = {};
@@ -2668,8 +2677,6 @@ async function initApp() {
 
 // Start the app
 document.body.classList.add('hide-available'); // Available toggle default OFF
-document.body.classList.add('hide-coverage'); // Coverage default OFF
-document.body.classList.add('hide-mission-assign'); // Mission assignments default OFF
 initApp();
 </script>
 </body>
