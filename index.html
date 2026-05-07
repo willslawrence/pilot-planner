@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Pilot Availability Planner v3.64 — THC H125</title>
+<title>Pilot Availability Planner v3.65 — THC H125</title>
 <style>
 :root {
   --bg: #0f1123;
@@ -217,7 +217,7 @@ body.has-pilot-focus .p-row.pilot-focused .pname { font-weight:700; color:var(--
   <div class="leg"><input type="color" id="cc-vacation" style="width:14px;height:14px;border:none;padding:0;cursor:pointer;border-radius:2px" onchange="ROT_COLORS.vacation=this.value;saveRotColors();render()"> Vacation</div>
   <div class="leg"><input type="color" id="cc-available" style="width:14px;height:14px;border:none;padding:0;cursor:pointer;border-radius:2px" onchange="ROT_COLORS.available=this.value;saveRotColors();render()"> Available</div>
   <div class="leg"><div class="lsw" style="background:var(--yellow)"></div> Cursor</div>
-  <span id="app-version" style="font-size:10px;opacity:.5;cursor:pointer;margin-left:4px;user-select:none">v3.64</span>
+  <span id="app-version" style="font-size:10px;opacity:.5;cursor:pointer;margin-left:4px;user-select:none">v3.65</span>
   <span id="legend-hint" style="margin-left:auto;font-size:10px">Add a note about 'Vacation' or 'Availability' with the + Add Rotation button.</span>
 </div>
 
@@ -1099,9 +1099,10 @@ function monthsHtml(td){
     const day=dt.getDate();
     const dow=dt.getDay();
     const isFri=dow===5;
+    const isWeekend=dow===5||dow===6;
     const border=isFri?'border-left:2px solid var(--sun-border-color);':'';
-    const bg=(dow===5||dow===6)?'background:rgba(255,255,255,.03);':'';
-    dRow+=`<div style="position:absolute;left:${LW+i*DW}px;width:${DW}px;height:16px;display:flex;align-items:center;justify-content:center;font-size:8px;color:${isFri?'var(--accent)':'var(--muted)'};${border}${bg}">${day}</div>`;
+    const bg=isWeekend?'background:rgba(255,255,255,.03);':'';
+    dRow+=`<div style="position:absolute;left:${LW+i*DW}px;width:${DW}px;height:16px;display:flex;align-items:center;justify-content:center;font-size:8px;color:${isWeekend?'var(--accent)':'var(--muted)'};${border}${bg}">${day}</div>`;
   }
   // Past shading + Today marker in month row
   const todayHeaderOff=dO(new Date());
