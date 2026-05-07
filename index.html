@@ -240,11 +240,12 @@ let isDirty = false;
 let adminMode = false;
 let simulateMode = false;
 function canEditAssignments(){ return adminMode || simulateMode; }
-function isCoverageHiddenForMission(m){
+// In viewer mode, coverage whose start is more than 30 days from today is hidden.
+// Accepts any object with a YYYY-MM-DD .start (mission OR individual assignment).
+function isCoverageHiddenForMission(o){
   if(adminMode || simulateMode) return false;
-  if(!m || !m.start) return false;
-  const today = F(new Date());
-  return dB(D(today), D(m.start)) > 30;
+  if(!o || !o.start) return false;
+  return dB(D(F(new Date())), D(o.start)) > 30;
 }
 let versionClickCount = 0;
 let versionClickTimer = null;
@@ -1388,6 +1389,7 @@ function missionRows(m,td){
     }
     if(!isCoverageHiddenForMission(m)) for(let ai=0;ai<arr.length;ai++){
       const a=arr[ai];
+      if(isCoverageHiddenForMission(a)) continue;
       const p=PILOTS.find(pp=>pp.name===a.pilot);
       const al=Math.max(0,dO(D(a.start)))*DW, aw=Math.max(14,(Math.min(td,dO(D(a.end))+1)-Math.max(0,dO(D(a.start))))*DW);
       const off=p?!isOn(p,a.start):false;
@@ -1468,6 +1470,7 @@ function adHocRows(missions,td){
         barsHtml+=`<div class="h-drop" data-mid="${m.id}" data-hi="${hi}" style="position:absolute;top:${laneTop}px;left:${ml}px;width:${mw}px;height:${heliH}px;z-index:0"></div>`;
         const arr=gA(m.id,hi);
         if(!isCoverageHiddenForMission(m)) for(const a of arr){
+          if(isCoverageHiddenForMission(a)) continue;
           const p=PILOTS.find(pp=>pp.name===a.pilot);
           const al=Math.max(0,dO(D(a.start)))*DW, aw=Math.max(14,(Math.min(td,dO(D(a.end))+1)-Math.max(0,dO(D(a.start))))*DW);
           const off=p?!isOn(p,a.start):false;
@@ -1551,8 +1554,7 @@ function pilotRow(p,td,ds){
     }
     if(cur)groups.push(cur);
     for(const a of groups){
-      const _m=MISSIONS.find(mm=>mm.id===a.mid);
-      if(isCoverageHiddenForMission(_m)) continue;
+      if(isCoverageHiddenForMission(a)) continue;
       const al=Math.max(0,dO(D(a.start)))*DW, aw=Math.max(14,(Math.min(td,dO(D(a.end))+1)-Math.max(0,dO(D(a.start))))*DW);
       bars+=`<div class="pa-block" data-pa-pilot="${p.name}" data-pa-mid="${a.mid}" data-pa-hi="${a.hi}" data-pa-start="${a.start}" data-pa-end="${a.end}" data-pa-mname="${a.mname}" style="left:${al}px;width:${aw}px;background:${a.color}CC">${a.mname}</div>`;
     }
@@ -1943,6 +1945,7 @@ function drawHandoffLines(){
         const a1=arr[i], a2=arr[i+1];
         if(a1.pilot===a2.pilot) continue;
         if(m.type==='Rally'||m.type==='Ad Hoc') continue; // No handoff lines for Ad Hoc missions
+        if(isCoverageHiddenForMission(a2)) continue;
         const gap=dB(D(a1.end),D(a2.start));
         if(gap>1) continue;
 
