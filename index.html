@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Pilot Availability Planner v3.63 — THC H125</title>
+<title>Pilot Availability Planner v3.64 — THC H125</title>
 <style>
 :root {
   --bg: #0f1123;
@@ -166,6 +166,20 @@ body.hide-all-missions .sec-row { display:none; }
 .admin-only-toggle { display:none; }
 body:not(.viewer-mode) .admin-only-toggle { display:flex; }
 body.hide-mission-assign .abar { display:none!important; }
+
+/* Pilot row focus mode: click a pilot's name to highlight that row and dim the others */
+.p-row .pname { flex:1; overflow:hidden; text-overflow:ellipsis; cursor:pointer; }
+.p-row .pname:hover { color:var(--accent); }
+body.has-pilot-focus .p-row { opacity:.25; transition:opacity .15s; }
+body.has-pilot-focus .p-row.pilot-focused { opacity:1; }
+body.has-pilot-focus .p-row.pilot-focused .pname { font-weight:700; color:var(--accent); }
+
+/* Mobile: respect iOS safe area at top, shrink the names column */
+@media (max-width: 768px) {
+  .header { padding-top:max(8px, env(safe-area-inset-top)); padding-left:12px; padding-right:12px; }
+  .header h1 { font-size:14px; }
+  .rlabel { min-width:110px; width:110px; padding:0 6px; }
+}
 </style>
 </head>
 <body>
@@ -203,7 +217,7 @@ body.hide-mission-assign .abar { display:none!important; }
   <div class="leg"><input type="color" id="cc-vacation" style="width:14px;height:14px;border:none;padding:0;cursor:pointer;border-radius:2px" onchange="ROT_COLORS.vacation=this.value;saveRotColors();render()"> Vacation</div>
   <div class="leg"><input type="color" id="cc-available" style="width:14px;height:14px;border:none;padding:0;cursor:pointer;border-radius:2px" onchange="ROT_COLORS.available=this.value;saveRotColors();render()"> Available</div>
   <div class="leg"><div class="lsw" style="background:var(--yellow)"></div> Cursor</div>
-  <span id="app-version" style="font-size:10px;opacity:.5;cursor:pointer;margin-left:4px;user-select:none">v3.63</span>
+  <span id="app-version" style="font-size:10px;opacity:.5;cursor:pointer;margin-left:4px;user-select:none">v3.64</span>
   <span id="legend-hint" style="margin-left:auto;font-size:10px">Add a note about 'Vacation' or 'Availability' with the + Add Rotation button.</span>
 </div>
 
@@ -967,7 +981,7 @@ function dispName(n) {
   const p = n.split(' ');
   return _fnCount[p[0]] > 1 && p.length > 1 ? `${p[0]} ${p[p.length-1][0]}.` : p[0];
 }
-let sel=new Date(), pop=null;
+let sel=new Date(), pop=null, focusedPilot=null;
 
 function isOn(p,ds){for(const r of p.rot)if(ds>=r.s&&ds<=r.e&&(r.st==='ON'||r.st==='WORKOVER'||r.st==='AVAILABLE_WORKOVER'))return true;return false;}
 function isVacExtra(p,ds){for(const r of p.rot)if(ds>=r.s&&ds<=r.e&&r.st==='VACATION_EXTRA')return true;return false;}
@@ -1535,7 +1549,7 @@ function pilotRow(p,td,ds){
   const catColor=gc(g);
   const labelStyle=on?`background:${ROT_COLORS.on};border-left:3px solid ${ROT_COLORS.on};color:#fff;font-weight:700`:`background:var(--surface);border-left:3px solid ${catColor};color:${catColor};font-weight:400;opacity:.85`;
   const safePN=p.name.replace(/'/g,"\\'");
-  return `<div class="row p-row" draggable="true" data-pilot="${p.name}" data-group="${g}"><div class="rlabel" style="${labelStyle}"><span style="flex:1;overflow:hidden;text-overflow:ellipsis">${p.name}</span><span class="rot-add-btn" onclick="event.stopPropagation();showAddRotPop(event,'${safePN}')" title="Add rotation" style="cursor:pointer;font-size:13px;opacity:.6;margin-left:4px;flex-shrink:0">+</span></div><div class="rbars" style="width:${td*DW}px;height:21px">${bars}${daysOnLabel}</div></div>`;
+  return `<div class="row p-row" draggable="true" data-pilot="${p.name}" data-group="${g}"><div class="rlabel" style="${labelStyle}"><span class="pname" onclick="togglePilotFocus('${safePN}')" title="Click to focus this pilot's row">${p.name}</span><span class="rot-add-btn" onclick="event.stopPropagation();showAddRotPop(event,'${safePN}')" title="Add rotation" style="cursor:pointer;font-size:13px;opacity:.6;margin-left:4px;flex-shrink:0">+</span></div><div class="rbars" style="width:${td*DW}px;height:21px">${bars}${daysOnLabel}</div></div>`;
 }
 
 // ====== ROTATION CLICK/EDIT POPOVER ======
@@ -1845,6 +1859,18 @@ function setupAssignmentClicks(){
   });
 }
 
+// ====== PILOT ROW FOCUS ======
+function togglePilotFocus(pilotName){
+  focusedPilot = (focusedPilot === pilotName) ? null : pilotName;
+  applyPilotFocus();
+}
+function applyPilotFocus(){
+  document.body.classList.toggle('has-pilot-focus', !!focusedPilot);
+  document.querySelectorAll('.p-row').forEach(row=>{
+    row.classList.toggle('pilot-focused', row.dataset.pilot === focusedPilot);
+  });
+}
+
 function setupPilotRowClicks(){
   document.querySelectorAll('.pa-block[data-pa-pilot]').forEach(blk=>{
     blk.style.pointerEvents='auto';
@@ -1867,6 +1893,8 @@ function setupPilotRowClicks(){
       }
     });
   });
+  // Re-apply pilot-focus visual state after each render rebuilds the rows.
+  applyPilotFocus();
 }
 
 // ====== HANDOFF LINES ======
