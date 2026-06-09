@@ -230,7 +230,7 @@ body.has-pilot-focus .p-row.pilot-focused .pname { font-weight:700; color:var(--
   <div class="leg"><input type="color" id="cc-training" style="width:14px;height:14px;border:none;padding:0;cursor:pointer;border-radius:2px" onchange="ROT_COLORS.training=this.value;saveRotColors();render()"> Training</div>
   <div class="leg"><input type="color" id="cc-available" style="width:14px;height:14px;border:none;padding:0;cursor:pointer;border-radius:2px" onchange="ROT_COLORS.available=this.value;saveRotColors();render()"> Available</div>
   <div class="leg"><div class="lsw" style="background:var(--yellow)"></div> Cursor</div>
-  <span id="app-version" style="font-size:10px;opacity:.5;cursor:pointer;margin-left:4px;user-select:none">v3.75</span>
+  <span id="app-version" style="font-size:10px;opacity:.5;cursor:pointer;margin-left:4px;user-select:none">v3.76</span>
   <span id="legend-hint" style="margin-left:auto;font-size:10px">Add a note about 'Vacation' or 'Availability' with the + Add Rotation button.</span>
 </div>
 
@@ -371,6 +371,7 @@ function toggleDualRated(){
 function toggleShowHidden(){
   const cb=document.getElementById('showHiddenToggle');
   document.body.classList.toggle('show-hidden-pilots',cb.checked);
+  drawHandoffLines();   // visibility changed — recompute coverage lines
 }
 
 // Per-row hide state (persisted). Toggled via the checkbox in each pilot row.
@@ -381,6 +382,7 @@ function toggleHidePilot(name,cb){
   saveHiddenPilots();
   const row=cb.closest('.p-row');
   if(row) row.classList.toggle('pilot-hidden',cb.checked);
+  drawHandoffLines();   // rows reflowed — recompute coverage lines to match
 }
 
 function toggleSimulate(){
@@ -1278,7 +1280,7 @@ function render(){
     let prev=null;
     for(const p of ps){
       const k=pgNum(p);
-      if(prev!==null && (k!==prev || k===Infinity)) html+=spacer;  // break between pairs; blanks always solo
+      if(prev!==null && k!==prev) html+=spacer;  // break only between distinct PairGroups; blanks clump tight
       html+=pilotRow(p,td,ds); listed.add(p.name);
       prev=k;
     }
@@ -2009,8 +2011,9 @@ function drawHandoffLines(){
   const pRows=document.querySelectorAll('.p-row');
   const pilotYMap={};
   pRows.forEach(row=>{
-    const name=row.dataset.pilot;
     const rect=row.getBoundingClientRect();
+    if(rect.height===0) return; // hidden row — skip so lines re-flow to the visible rows
+    const name=row.dataset.pilot;
     pilotYMap[name]={top:rect.top-wrapRect.top, height:rect.height, cy:rect.top-wrapRect.top+rect.height/2};
   });
 
