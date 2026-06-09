@@ -167,6 +167,15 @@ body.hide-all-missions .sec-row { display:none; }
 .admin-only-toggle { display:none; }
 body:not(.viewer-mode) .admin-only-toggle { display:flex; }
 body.hide-mission-assign .abar { display:none!important; }
+/* Dual-rated pilots: hidden until the Dual Rated toggle is on */
+body:not(.show-dual-rated) .p-row.dual-rated,
+body:not(.show-dual-rated) .dual-rated-header { display:none; }
+.dual-badge { font-size:8px; font-weight:700; color:var(--accent); margin-left:4px; opacity:.85; white-space:nowrap; flex-shrink:0; }
+/* Per-row hide: rows checked off are hidden unless Show Hidden is on */
+.row-hide-cb { width:11px; height:11px; flex-shrink:0; cursor:pointer; margin:0 1px 0 0; opacity:.45; }
+.row-hide-cb:hover { opacity:1; }
+body:not(.show-hidden-pilots) .p-row.pilot-hidden { display:none; }
+body.show-hidden-pilots .p-row.pilot-hidden { opacity:.45; }
 
 /* Pilot row focus mode: click a pilot's name to highlight that row and dim the others */
 .p-row .pname { flex:1; overflow:hidden; text-overflow:ellipsis; cursor:pointer; }
@@ -193,6 +202,8 @@ body.has-pilot-focus .p-row.pilot-focused .pname { font-weight:700; color:var(--
     <label class="toggle admin-only-toggle" title="Toggle pilot assignments on mission bars"><input type="checkbox" id="missionAssignToggle" checked onchange="toggleMissionAssign()"><span class="toggle-slider"></span><span class="toggle-lbl">Mission Assignments</span></label>
     <label class="toggle" title="Toggle available rotation bars"><input type="checkbox" id="availToggle" onchange="toggleAvailable()"><span class="toggle-slider"></span><span class="toggle-lbl">Available</span></label>
     <label class="toggle admin-only-toggle" title="Hide all mission rows"><input type="checkbox" id="hideMissionsToggle" onchange="toggleHideMissions()"><span class="toggle-slider"></span><span class="toggle-lbl">Hide Missions</span></label>
+    <label class="toggle" title="Show dual-rated pilots (hidden by default)"><input type="checkbox" id="dualRatedToggle" onchange="toggleDualRated()"><span class="toggle-slider"></span><span class="toggle-lbl">Dual Rated</span></label>
+    <label class="toggle" title="Reveal pilot rows you've individually hidden so you can restore them"><input type="checkbox" id="showHiddenToggle" onchange="toggleShowHidden()"><span class="toggle-slider"></span><span class="toggle-lbl">Show Hidden</span></label>
 
     <button onclick="window.open('https://willslawrence.github.io/thc-fleet-map-v2/','_blank')" title="Open Fleet Map">🗺️ Fleet Map</button>
     <button id="commitBtn" onclick="commitChanges()" title="Save changes to Google Sheets" style="position:relative;">💾 Commit</button>
@@ -219,7 +230,7 @@ body.has-pilot-focus .p-row.pilot-focused .pname { font-weight:700; color:var(--
   <div class="leg"><input type="color" id="cc-training" style="width:14px;height:14px;border:none;padding:0;cursor:pointer;border-radius:2px" onchange="ROT_COLORS.training=this.value;saveRotColors();render()"> Training</div>
   <div class="leg"><input type="color" id="cc-available" style="width:14px;height:14px;border:none;padding:0;cursor:pointer;border-radius:2px" onchange="ROT_COLORS.available=this.value;saveRotColors();render()"> Available</div>
   <div class="leg"><div class="lsw" style="background:var(--yellow)"></div> Cursor</div>
-  <span id="app-version" style="font-size:10px;opacity:.5;cursor:pointer;margin-left:4px;user-select:none">v3.73</span>
+  <span id="app-version" style="font-size:10px;opacity:.5;cursor:pointer;margin-left:4px;user-select:none">v3.74</span>
   <span id="legend-hint" style="margin-left:auto;font-size:10px">Add a note about 'Vacation' or 'Availability' with the + Add Rotation button.</span>
 </div>
 
@@ -352,6 +363,26 @@ function toggleMissionAssign(){
   document.body.classList.toggle('hide-mission-assign',!cb.checked);
 }
 
+function toggleDualRated(){
+  const cb=document.getElementById('dualRatedToggle');
+  document.body.classList.toggle('show-dual-rated',cb.checked);
+}
+
+function toggleShowHidden(){
+  const cb=document.getElementById('showHiddenToggle');
+  document.body.classList.toggle('show-hidden-pilots',cb.checked);
+}
+
+// Per-row hide state (persisted). Toggled via the checkbox in each pilot row.
+let HIDDEN_PILOTS=new Set(JSON.parse(localStorage.getItem('pp_hiddenPilots')||'[]'));
+function saveHiddenPilots(){localStorage.setItem('pp_hiddenPilots',JSON.stringify([...HIDDEN_PILOTS]));}
+function toggleHidePilot(name,cb){
+  if(cb.checked) HIDDEN_PILOTS.add(name); else HIDDEN_PILOTS.delete(name);
+  saveHiddenPilots();
+  const row=cb.closest('.p-row');
+  if(row) row.classList.toggle('pilot-hidden',cb.checked);
+}
+
 function toggleSimulate(){
   simulateMode=!simulateMode;
   if(simulateMode) adminMode=false;
@@ -377,6 +408,7 @@ async function fetchFromAPI() {
       management: pilot.Management,
       mg: pilot.Management ? 1 : 0,
       temp: pilot.Temp === true || pilot.Temp === 'TRUE',
+      dualRated: pilot.DualRated === true || pilot.DualRated === 'TRUE' || pilot.DualRated === 'Yes',
       rot: [], // Will be populated from rotations data
       ev: [] // Events - keep empty for now
     }));
@@ -1209,7 +1241,8 @@ function render(){
   html+=weekOverlays(td);
   html+=monthOverlays(td, months);
 
-  const uamP=PILOTS.filter(p=>pg(p)==='uam'), bothP=PILOTS.filter(p=>pg(p)==='both'), survP=PILOTS.filter(p=>pg(p)==='survey');
+  const dualP=PILOTS.filter(p=>p.dualRated);
+  const uamP=PILOTS.filter(p=>!p.dualRated&&pg(p)==='uam'), bothP=PILOTS.filter(p=>!p.dualRated&&pg(p)==='both'), survP=PILOTS.filter(p=>!p.dualRated&&pg(p)==='survey');
 
   // Missions by type
   const uam=MISSIONS.filter(m=>m.type==='UAM'), surv=MISSIONS.filter(m=>m.type==='Survey'), trn=MISSIONS.filter(m=>m.type==='Training'), rally=MISSIONS.filter(m=>m.type==='Rally'||m.type==='Ad Hoc');
@@ -1257,7 +1290,12 @@ function render(){
   }
   // Any remaining pilots not in groups
   for(const p of [...uamP,...bothP,...survP]){
-    if(!listed.has(p.name)){html+=pilotRow(p,td,ds);}
+    if(!listed.has(p.name)){html+=pilotRow(p,td,ds);listed.add(p.name);}
+  }
+  // Dual-rated pilots — rendered dynamically from sheet data, hidden until the Dual Rated toggle is on
+  if(dualP.length){
+    html+=`<div class="row dual-rated-header" style="min-height:7px;"><div class="rlabel" style="font-size:8px;font-weight:700;color:var(--accent);opacity:.8;padding:0 6px;display:flex;align-items:center">Dual Rated</div><div class="rbars" style="width:${td*DW}px;border-bottom:1px solid var(--accent)"></div></div>`;
+    for(const p of dualP){html+=pilotRow(p,td,ds);listed.add(p.name);}
   }
   html+=`<div class="row" style="min-height:22px"><div class="rlabel"><span class="add-btn" onclick="showAddPilotPop(event)">+ Add Pilot</span></div><div class="rbars" style="width:${td*DW}px"></div></div>`;
 
@@ -1596,7 +1634,10 @@ function pilotRow(p,td,ds){
   const catColor=gc(g);
   const labelStyle=on?`background:${ROT_COLORS.on};border-left:3px solid ${ROT_COLORS.on};color:#fff;font-weight:700`:`background:var(--surface);border-left:3px solid ${catColor};color:${catColor};font-weight:400;opacity:.85`;
   const safePN=p.name.replace(/'/g,"\\'");
-  return `<div class="row p-row" draggable="true" data-pilot="${p.name}" data-group="${g}"><div class="rlabel" style="${labelStyle}"><span class="pname" onclick="togglePilotFocus('${safePN}')" title="Click to focus this pilot's row">${p.name}</span><span class="rot-add-btn" onclick="event.stopPropagation();showAddRotPop(event,'${safePN}')" title="Add rotation" style="cursor:pointer;font-size:13px;opacity:.6;margin-left:4px;flex-shrink:0">+</span></div><div class="rbars" style="width:${td*DW}px;height:21px">${bars}${daysOnLabel}</div></div>`;
+  const rowCls=`row p-row${p.dualRated?' dual-rated':''}${HIDDEN_PILOTS.has(p.name)?' pilot-hidden':''}`;
+  const hideCb=`<input type="checkbox" class="row-hide-cb" ${HIDDEN_PILOTS.has(p.name)?'checked':''} onclick="event.stopPropagation();toggleHidePilot('${safePN}',this)" title="Hide this row">`;
+  const dualBadge=p.dualRated?`<span class="dual-badge" title="Dual rated pilot">(Dual Rated)</span>`:'';
+  return `<div class="${rowCls}" draggable="true" data-pilot="${p.name}" data-group="${g}"><div class="rlabel" style="${labelStyle}">${hideCb}<span class="pname" onclick="togglePilotFocus('${safePN}')" title="Click to focus this pilot's row">${p.name}</span>${dualBadge}<span class="rot-add-btn" onclick="event.stopPropagation();showAddRotPop(event,'${safePN}')" title="Add rotation" style="cursor:pointer;font-size:13px;opacity:.6;margin-left:4px;flex-shrink:0">+</span></div><div class="rbars" style="width:${td*DW}px;height:21px">${bars}${daysOnLabel}</div></div>`;
 }
 
 // ====== ROTATION CLICK/EDIT POPOVER ======
