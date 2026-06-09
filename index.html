@@ -230,7 +230,7 @@ body.has-pilot-focus .p-row.pilot-focused .pname { font-weight:700; color:var(--
   <div class="leg"><input type="color" id="cc-training" style="width:14px;height:14px;border:none;padding:0;cursor:pointer;border-radius:2px" onchange="ROT_COLORS.training=this.value;saveRotColors();render()"> Training</div>
   <div class="leg"><input type="color" id="cc-available" style="width:14px;height:14px;border:none;padding:0;cursor:pointer;border-radius:2px" onchange="ROT_COLORS.available=this.value;saveRotColors();render()"> Available</div>
   <div class="leg"><div class="lsw" style="background:var(--yellow)"></div> Cursor</div>
-  <span id="app-version" style="font-size:10px;opacity:.5;cursor:pointer;margin-left:4px;user-select:none">v3.74</span>
+  <span id="app-version" style="font-size:10px;opacity:.5;cursor:pointer;margin-left:4px;user-select:none">v3.77</span>
   <span id="legend-hint" style="margin-left:auto;font-size:10px">Add a note about 'Vacation' or 'Availability' with the + Add Rotation button.</span>
 </div>
 
@@ -371,6 +371,7 @@ function toggleDualRated(){
 function toggleShowHidden(){
   const cb=document.getElementById('showHiddenToggle');
   document.body.classList.toggle('show-hidden-pilots',cb.checked);
+  drawHandoffLines();   // visibility changed — recompute coverage lines
 }
 
 // Per-row hide state (persisted). Toggled via the checkbox in each pilot row.
@@ -381,6 +382,7 @@ function toggleHidePilot(name,cb){
   saveHiddenPilots();
   const row=cb.closest('.p-row');
   if(row) row.classList.toggle('pilot-hidden',cb.checked);
+  drawHandoffLines();   // rows reflowed — recompute coverage lines to match
 }
 
 function toggleSimulate(){
@@ -1242,7 +1244,6 @@ function render(){
   html+=monthOverlays(td, months);
 
   const dualP=PILOTS.filter(p=>p.dualRated);
-  const uamP=PILOTS.filter(p=>!p.dualRated&&pg(p)==='uam'), bothP=PILOTS.filter(p=>!p.dualRated&&pg(p)==='both'), survP=PILOTS.filter(p=>!p.dualRated&&pg(p)==='survey');
 
   // Missions by type
   const uam=MISSIONS.filter(m=>m.type==='UAM'), surv=MISSIONS.filter(m=>m.type==='Survey'), trn=MISSIONS.filter(m=>m.type==='Training'), rally=MISSIONS.filter(m=>m.type==='Rally'||m.type==='Ad Hoc');
@@ -1256,42 +1257,23 @@ function render(){
 
   html+=`<div class="separator"></div>`;
 
-  // Pilot pairs (ordered)
-  const pairOrder=[
-    ['Will Lawrence','Stephan Mayer'],
-    ['David Leipsig','Nathan Piper'],
-    ['Lisa le Roux','Iwona Redlinska'],
-    ['Rohit Kaundinya','Lindsay Pentz'],
-    ['David Schicht','Kevin Allen'],
-    ['Dan Munteanu','Marius Hertz'],
-    ['Julio Bonet',"Matt O'Brien"],
-  ];
   const listed=new Set();
   html+=secRow('Pilots','var(--teal)',td);
 
-  // Category groups with sub-headers
-  const catGroups=[
-    {label:'Management',color:PILOT_COLORS.mg||'#9CA3AF',pairs:[['Will Lawrence','Roberto Piani']]},
-    {label:'UAM',color:PILOT_COLORS.uam,pairs:[['Stephan Mayer'],['David Leipsig','Nathan Piper'],['Lisa le Roux','Iwona Redlinska'],['Rohit Kaundinya','Lindsay Pentz']]},
-    {label:'UAM + Survey',color:PILOT_COLORS.both,pairs:[['David Schicht','Kevin Allen']]},
-    {label:'Survey',color:PILOT_COLORS.survey,pairs:[['Dan Munteanu','Marius Hertz'],['Julio Bonet',"Matt O'Brien"]]},
-  ];
-  for(const cat of catGroups){
-    // Category sub-header (compact)
-    html+=`<div class="row" style="min-height:7px;"><div class="rlabel" style="font-size:8px;font-weight:700;color:${cat.color};opacity:.8;padding:0 6px;display:flex;align-items:center">${cat.label}</div><div class="rbars" style="width:${td*DW}px;border-bottom:1px solid ${cat.color}30"></div></div>`;
-    for(const pair of cat.pairs){
-      for(const name of pair){
-        const p=PILOTS.find(pp=>pp.name===name);
-        if(p){html+=pilotRow(p,td,ds);listed.add(name);}
-      }
-      // Spacer between pairs
-      html+=`<div style="height:7px;background:rgba(255,255,255,.03)"></div>`;
-    }
+  // Rows follow Google Sheet row order; color comes from qualification (pg→color),
+  // NOT from grouping. Pilots sharing a PairGroup render tight (a "pair"); a gap
+  // is inserted whenever the PairGroup changes. Reorder/pair anyone by moving
+  // rows or setting PairGroup in the Sheet — no code change, no category headers.
+  const spacer=`<div style="height:7px;background:rgba(255,255,255,.03)"></div>`;
+  let prevPg=null;
+  for(const p of PILOTS){
+    if(p.dualRated) continue;   // dual-rated render in their own toggle-hidden section below
+    const k=(p.pairGroup||'').toString().trim();
+    if(prevPg!==null && k!==prevPg) html+=spacer;   // gap between distinct PairGroups
+    html+=pilotRow(p,td,ds); listed.add(p.name);
+    prevPg=k;
   }
-  // Any remaining pilots not in groups
-  for(const p of [...uamP,...bothP,...survP]){
-    if(!listed.has(p.name)){html+=pilotRow(p,td,ds);listed.add(p.name);}
-  }
+  html+=spacer;
   // Dual-rated pilots — rendered dynamically from sheet data, hidden until the Dual Rated toggle is on
   if(dualP.length){
     html+=`<div class="row dual-rated-header" style="min-height:7px;"><div class="rlabel" style="font-size:8px;font-weight:700;color:var(--accent);opacity:.8;padding:0 6px;display:flex;align-items:center">Dual Rated</div><div class="rbars" style="width:${td*DW}px;border-bottom:1px solid var(--accent)"></div></div>`;
@@ -2013,8 +1995,9 @@ function drawHandoffLines(){
   const pRows=document.querySelectorAll('.p-row');
   const pilotYMap={};
   pRows.forEach(row=>{
-    const name=row.dataset.pilot;
     const rect=row.getBoundingClientRect();
+    if(rect.height===0) return; // hidden row — skip so lines re-flow to the visible rows
+    const name=row.dataset.pilot;
     pilotYMap[name]={top:rect.top-wrapRect.top, height:rect.height, cy:rect.top-wrapRect.top+rect.height/2};
   });
 
