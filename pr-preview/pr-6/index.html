@@ -230,7 +230,7 @@ body.has-pilot-focus .p-row.pilot-focused .pname { font-weight:700; color:var(--
   <div class="leg"><input type="color" id="cc-training" style="width:14px;height:14px;border:none;padding:0;cursor:pointer;border-radius:2px" onchange="ROT_COLORS.training=this.value;saveRotColors();render()"> Training</div>
   <div class="leg"><input type="color" id="cc-available" style="width:14px;height:14px;border:none;padding:0;cursor:pointer;border-radius:2px" onchange="ROT_COLORS.available=this.value;saveRotColors();render()"> Available</div>
   <div class="leg"><div class="lsw" style="background:var(--yellow)"></div> Cursor</div>
-  <span id="app-version" style="font-size:10px;opacity:.5;cursor:pointer;margin-left:4px;user-select:none">v3.76</span>
+  <span id="app-version" style="font-size:10px;opacity:.5;cursor:pointer;margin-left:4px;user-select:none">v3.77</span>
   <span id="legend-hint" style="margin-left:auto;font-size:10px">Add a note about 'Vacation' or 'Availability' with the + Add Rotation button.</span>
 </div>
 
@@ -1260,36 +1260,20 @@ function render(){
   const listed=new Set();
   html+=secRow('Pilots','var(--teal)',td);
 
-  // Data-driven pilot ordering: group by category, order within a group by the
-  // Sheet's PairGroup (then name). Pilots sharing a PairGroup render adjacent
-  // (a "pair"); blank PairGroup = solo. Reorder a pilot by editing their
-  // Category / PairGroup in the Sheet — no code change needed.
-  const catOrder=[
-    {key:'mg',     label:'Management',   color:PILOT_COLORS.mg||'#9CA3AF'},
-    {key:'uam',    label:'UAM',          color:PILOT_COLORS.uam},
-    {key:'both',   label:'UAM + Survey', color:PILOT_COLORS.both},
-    {key:'survey', label:'Survey',       color:PILOT_COLORS.survey},
-  ];
+  // Rows follow Google Sheet row order; color comes from qualification (pg→color),
+  // NOT from grouping. Pilots sharing a PairGroup render tight (a "pair"); a gap
+  // is inserted whenever the PairGroup changes. Reorder/pair anyone by moving
+  // rows or setting PairGroup in the Sheet — no code change, no category headers.
   const spacer=`<div style="height:7px;background:rgba(255,255,255,.03)"></div>`;
-  const pgNum=p=>{const n=parseInt(p.pairGroup,10);return isNaN(n)?Infinity:n;};
-  for(const cat of catOrder){
-    const ps=PILOTS.filter(p=>!p.dualRated&&pg(p)===cat.key)
-                   .sort((a,b)=>pgNum(a)-pgNum(b)||a.name.localeCompare(b.name));
-    if(!ps.length) continue;
-    html+=`<div class="row" style="min-height:7px;"><div class="rlabel" style="font-size:8px;font-weight:700;color:${cat.color};opacity:.8;padding:0 6px;display:flex;align-items:center">${cat.label}</div><div class="rbars" style="width:${td*DW}px;border-bottom:1px solid ${cat.color}30"></div></div>`;
-    let prev=null;
-    for(const p of ps){
-      const k=pgNum(p);
-      if(prev!==null && k!==prev) html+=spacer;  // break only between distinct PairGroups; blanks clump tight
-      html+=pilotRow(p,td,ds); listed.add(p.name);
-      prev=k;
-    }
-    html+=spacer;
-  }
-  // Any pilots whose category isn't one of the above (e.g. temp) — render at the end
+  let prevPg=null;
   for(const p of PILOTS){
-    if(!p.dualRated && !listed.has(p.name)){html+=pilotRow(p,td,ds);listed.add(p.name);}
+    if(p.dualRated) continue;   // dual-rated render in their own toggle-hidden section below
+    const k=(p.pairGroup||'').toString().trim();
+    if(prevPg!==null && k!==prevPg) html+=spacer;   // gap between distinct PairGroups
+    html+=pilotRow(p,td,ds); listed.add(p.name);
+    prevPg=k;
   }
+  html+=spacer;
   // Dual-rated pilots — rendered dynamically from sheet data, hidden until the Dual Rated toggle is on
   if(dualP.length){
     html+=`<div class="row dual-rated-header" style="min-height:7px;"><div class="rlabel" style="font-size:8px;font-weight:700;color:var(--accent);opacity:.8;padding:0 6px;display:flex;align-items:center">Dual Rated</div><div class="rbars" style="width:${td*DW}px;border-bottom:1px solid var(--accent)"></div></div>`;
