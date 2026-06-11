@@ -477,7 +477,8 @@ async function fetchFromAPI() {
       apiAssignments[key].push({
         pilot: assignment.Pilot,
         start: parseDateFromISO(assignment.Start),
-        end: parseDateFromISO(assignment.End)
+        end: parseDateFromISO(assignment.End),
+        note: assignment.Note || ''
       });
     });
     
@@ -533,7 +534,8 @@ async function commitToAPI() {
           `heli-${parseInt(heliSlot) + 1}`,
           assignment.start,
           assignment.end,
-          timestamp
+          timestamp,
+          assignment.note || ''
         ]);
       }
     }
@@ -1085,13 +1087,13 @@ function busy(name,s,e,xm,xh){
   return false;
 }
 
-function addAs(m,h,pilot,s,e){
+function addAs(m,h,pilot,s,e,note){
   const k=sk(m,h);
   if(!asgn[k]) asgn[k]=[];
   // Allow overlaps — no conflict check
   // Remove exact duplicates
   asgn[k]=asgn[k].filter(a=>!(a.pilot===pilot&&a.start===s&&a.end===e));
-  asgn[k].push({pilot,start:s,end:e});
+  asgn[k].push({pilot,start:s,end:e,note:note||''});
   asgn[k].sort((a,b)=>a.start.localeCompare(b.start));
   return true;
 }
@@ -1450,7 +1452,7 @@ function missionRows(m,td){
         barTop = laneTop+3;
         barH = laneH-6;
       }
-      barsHtml+=`<div class="${cls}" draggable="true" data-apilot="${a.pilot}" data-astart="${a.start}" data-aend="${a.end}" data-amid="${m.id}" data-ahi="${hi}" style="left:${al}px;width:${aw}px;top:${barTop}px;height:${barH}px;background:${p?gc(pg(p)):'#666'}" title="${a.pilot}: ${a.start}→${a.end}${off?' (OFF!)':''}">
+      barsHtml+=`<div class="${cls}" draggable="true" data-apilot="${a.pilot}" data-astart="${a.start}" data-aend="${a.end}" data-amid="${m.id}" data-ahi="${hi}" style="left:${al}px;width:${aw}px;top:${barTop}px;height:${barH}px;background:${p?gc(pg(p)):'#666'}" title="${a.pilot}: ${a.start}→${a.end}${off?' (OFF!)':''}${a.note?'\n'+a.note.replace(/"/g,'&quot;'):''}">
         ${weekTicksHTML(al,aw,'rgba(255,255,255,.2)')}
         <span class="abar-grip abar-grip-l" data-edge="start" data-apilot="${a.pilot}" data-astart="${a.start}" data-aend="${a.end}" data-amid="${m.id}" data-ahi="${hi}"></span>
         ${aw>90?`<span class="abar-date abar-date-l">${a.start.slice(5)}</span>`:''}${fn}${aw>90?`<span class="abar-date abar-date-r">${a.end.slice(5)}</span>`:''}
@@ -1853,13 +1855,20 @@ function showAsgnPop(e, opts, avoidEl){
   e.stopPropagation();
   if(pop) pop.remove();
   const div=document.createElement('div');div.className='pop';
-  div.style.top=Math.min(e.clientY+5,innerHeight-380)+'px';
+  div.style.top=Math.min(e.clientY+5,innerHeight-460)+'px';
   div.style.left=Math.min(e.clientX,innerWidth-300)+'px';
   let mOpts='';
   for(const m of MISSIONS){
     mOpts+=`<option value="${m.id}"${m.id===opts.mid?' selected':''}>${m.name} (${m.type})</option>`;
   }
   const curM=MISSIONS.find(mm=>mm.id===opts.mid);
+  // Pull any existing note for this exact assignment so editing preserves it
+  let existingNote='';
+  if(!opts.isNew){
+    const exArr=asgn[sk(opts.mid,opts.hi)]||[];
+    const exA=exArr.find(a=>a.pilot===opts.pilot&&a.start===opts.start);
+    if(exA) existingNote=exA.note||'';
+  }
   let hOpts='';
   if(curM){
     for(let i=0;i<curM.hc;i++){
@@ -1877,6 +1886,8 @@ function showAsgnPop(e, opts, avoidEl){
     <input type="date" id="ae-start" value="${opts.start||''}">
     <label>End Date</label>
     <input type="date" id="ae-end" value="${opts.end||''}">
+    <label>Note</label>
+    <textarea id="ae-note" rows="3" placeholder="Optional note" style="width:100%;resize:vertical;font-family:inherit">${(existingNote||'').replace(/</g,'&lt;')}</textarea>
     <div class="pb">
       ${opts.isNew?'':'<button class="pdel" onclick="aeDelete()">Delete</button>'}
       <button class="pcancel" onclick="cPop()">Cancel</button>
@@ -1910,6 +1921,8 @@ function aeSave(){
   const hi=parseInt(document.getElementById('ae-heli').value);
   const start=document.getElementById('ae-start').value;
   const end=document.getElementById('ae-end').value;
+  const noteEl=document.getElementById('ae-note');
+  const note=noteEl?noteEl.value.trim():'';
   if(!start||!end){alert('Please set both start and end dates');return;}
   if(end<start){alert('End date must be after start date');return;}
   const m=MISSIONS.find(mm=>mm.id===mid);
@@ -1920,7 +1933,7 @@ function aeSave(){
   if(!ctx.isNew && ctx.origStart){
     remAs(ctx.origMid,ctx.origHi,ctx.pilot,ctx.origStart);
   }
-  addAs(mid,hi,ctx.pilot,start,end);
+  addAs(mid,hi,ctx.pilot,start,end,note);
   cPop();render();
 }
 
@@ -2277,7 +2290,9 @@ function setupAssignmentResize(){
         if(moved && previewStart!==origStart){
           const m=MISSIONS.find(mm=>mm.id===mid);
           if(m && previewStart>=m.start && previewEnd<=m.end){
-            addAs(mid,hi,pilot,previewStart,previewEnd);
+            const prevArr=asgn[sk(mid,hi)]||[];
+            const prevA=prevArr.find(a=>a.pilot===pilot&&a.start===origStart);
+            addAs(mid,hi,pilot,previewStart,previewEnd,prevA?prevA.note:'');
             render();
             saveData();
           }
