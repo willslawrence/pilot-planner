@@ -230,13 +230,48 @@ body.has-pilot-focus .p-row.pilot-focused .pname { font-weight:700; color:var(--
   <div class="leg"><input type="color" id="cc-training" style="width:14px;height:14px;border:none;padding:0;cursor:pointer;border-radius:2px" onchange="ROT_COLORS.training=this.value;saveRotColors();render()"> Training</div>
   <div class="leg"><input type="color" id="cc-available" style="width:14px;height:14px;border:none;padding:0;cursor:pointer;border-radius:2px" onchange="ROT_COLORS.available=this.value;saveRotColors();render()"> Available</div>
   <div class="leg"><div class="lsw" style="background:var(--yellow)"></div> Cursor</div>
-  <span id="app-version" style="font-size:10px;opacity:.5;cursor:pointer;margin-left:4px;user-select:none">v3.77</span>
+  <span id="app-version" style="font-size:10px;opacity:.5;cursor:pointer;margin-left:4px;user-select:none">v3.78</span>
   <span id="legend-hint" style="margin-left:auto;font-size:10px">Add a note about 'Vacation' or 'Availability' with the + Add Rotation button.</span>
 </div>
 
 <script>
 // ====== API CONFIGURATION ======
 const BASE_URL = "https://script.google.com/macros/s/AKfycbx2PG54ptMJw3eJW2vxNrvRJOaJVfXzOQYnJg-qHbV0vrBU1W16tq2lpGKlVfVXVpyX6w/exec";
+
+// ====== PUSH NOTIFICATIONS (ntfy.sh) ======
+// When a pilot submits an Available / Work Over request, a push is sent to this
+// ntfy topic. Subscribe to this exact topic name in the ntfy app to receive them.
+// NOTE: ntfy.sh topics are public to anyone who knows the name — keep it private.
+// To turn notifications off, set NTFY_TOPIC to "".
+const NTFY_TOPIC = "pilot-planner-reqs-a7f3k9q2";
+const NTFY_URL = "https://ntfy.sh";
+
+// Fire-and-forget push notification. Never throws — failures are only logged so
+// that a notification problem can never block or break saving a request.
+function notifyNtfy(title, message, tags){
+  if(!NTFY_TOPIC) return;
+  try{
+    fetch(NTFY_URL, {
+      method:'POST',
+      headers:{'Content-Type':'text/plain'}, // text/plain avoids a CORS preflight
+      body: JSON.stringify({
+        topic: NTFY_TOPIC,
+        title: title,
+        message: message,
+        tags: tags || [],
+        priority: 4
+      })
+    }).catch(err=>console.warn('ntfy notify failed:', err));
+  }catch(err){ console.warn('ntfy notify failed:', err); }
+}
+
+// Human-readable label for the rotation statuses that represent a pilot request,
+// or null for statuses that should not trigger a notification.
+function rotRequestLabel(st){
+  if(st === 'AVAILABLE_WORKOVER') return 'Available';
+  if(st === 'WORKOVER') return 'Work Over';
+  return null;
+}
 
 // ====== GLOBAL STATE ======
 let PILOTS = [];
@@ -1766,7 +1801,18 @@ function saveWorkoverPop(){
   if(!adminMode && !simulateMode){
     showSaving();
     commitToAPI()
-      .then(()=>hideSaving(true))
+      .then(()=>{
+        hideSaving(true);
+        // Notify only after the request is durably saved to the sheet.
+        const reqLabel = rotRequestLabel(rotType);
+        if(reqLabel){
+          notifyNtfy(
+            `🚁 ${reqLabel} request: ${pilotName}`,
+            `${pilotName} requested ${reqLabel}\n${start} → ${end}` + (note?`\n\n${note}`:''),
+            ['airplane']
+          );
+        }
+      })
       .catch(err=>{hideSaving(false);showMessage('❌ Failed to save: '+err.message,'error');});
   }
 }
