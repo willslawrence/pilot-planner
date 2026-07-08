@@ -285,6 +285,40 @@ let lastCommitTime = null;
 let SHEET_REV = null; // Sheet revision at load time — stale-page guard (commitAll rejects if the Sheet moved on)
 let isDirty = false;
 
+// --- Freshness watch: auto-refresh when the Sheet moves on ---
+// The Obsidian syncs are event-driven (missions: seconds after a vault edit;
+// pilots: every 15 min), so there's no fixed cadence to refresh around.
+// Instead: check the Sheet's rev on window focus (throttled) and every 30 min.
+// Sheet changed + no unsaved edits -> reload seamlessly. Unsaved edits -> show
+// a banner (committing would be rejected by the guard and reload anyway).
+let _lastRevCheck = 0;
+let _staleBanner = null;
+async function checkFreshness() {
+  if (SHEET_REV === null) return;               // initial load not finished
+  const now = Date.now();
+  if (now - _lastRevCheck < 60000) return;      // throttle focus-event spam
+  _lastRevCheck = now;
+  try {
+    const resp = await fetch(`${BASE_URL}?action=readAll`);
+    if (!resp.ok) return;
+    const data = await resp.json();
+    if (data.rev === undefined || data.rev === null || Number(data.rev) === SHEET_REV) return;
+    if (!isDirty) {
+      showMessage('Newer data on the Sheet — refreshing…', 'info');
+      setTimeout(() => location.reload(), 1200);
+    } else if (!_staleBanner) {
+      _staleBanner = document.createElement('div');
+      _staleBanner.style.cssText = 'position:fixed;top:0;left:0;right:0;z-index:99999;background:#b26a00;color:#fff;font:600 13px/1.45 -apple-system,BlinkMacSystemFont,sans-serif;padding:9px 44px 9px 14px;text-align:center;box-shadow:0 2px 8px rgba(0,0,0,.3)';
+      _staleBanner.innerHTML = '⚠️ The Sheet has newer data than this page. Note your uncommitted edits, then refresh — committing now will be rejected and reload anyway.'
+        + '<span onclick="this.parentNode.remove();_staleBanner=null" style="position:absolute;right:14px;top:8px;cursor:pointer;font-size:16px">✕</span>';
+      document.body.appendChild(_staleBanner);
+    }
+  } catch (e) { /* offline / transient — ignore, next check will catch it */ }
+}
+window.addEventListener('focus', checkFreshness);
+document.addEventListener('visibilitychange', () => { if (!document.hidden) checkFreshness(); });
+setInterval(checkFreshness, 30 * 60 * 1000);
+
 // ====== ADMIN MODE ======
 let adminMode = false;
 let simulateMode = false;
