@@ -282,6 +282,7 @@ let ORIGINAL_MISSIONS = []; // Store original mission state for dirty checking
 let ORIGINAL_MISSIONS_LOADED = []; // Immutable copy of missions as loaded from Sheet (never modified by local edits)
 let ORIGINAL_ROTATIONS = ''; // Store original rotation state for dirty checking
 let lastCommitTime = null;
+let SHEET_REV = null; // Sheet revision at load time — stale-page guard (commitAll rejects if the Sheet moved on)
 let isDirty = false;
 
 // ====== ADMIN MODE ======
@@ -434,7 +435,10 @@ async function fetchFromAPI() {
     const response = await fetch(`${BASE_URL}?action=readAll`);
     if (!response.ok) throw new Error(`HTTP ${response.status}`);
     const data = await response.json();
-    
+
+    // Stale-page guard: remember the Sheet revision this page loaded from.
+    SHEET_REV = (data.rev !== undefined && data.rev !== null) ? Number(data.rev) : null;
+
     // Parse the data from the API
     PILOTS = data.pilots.filter(pilot => pilot.Name).map(pilot => ({
       name: pilot.Name,
@@ -575,24 +579,6 @@ async function commitToAPI() {
       }
     }
     
-    // Skip assignments write if no assignments (API rejects empty rows)
-    let result = { success: true, rowsWritten: 0 };
-    if (rows.length > 0) {
-      const response = await fetch(`${BASE_URL}?action=write&sheet=Assignments`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'text/plain',
-        },
-        body: JSON.stringify({ rows }),
-        redirect: 'follow'
-      });
-      
-      if (!response.ok) throw new Error(`HTTP ${response.status}`);
-      result = await response.json();
-      
-      if (!result.success) throw new Error('Assignments write failed');
-    }
-
     // Mission data is READ-ONLY from Sheet (Obsidian is source of truth).
     // We write missions back with ORIGINAL loaded data (not local edits) to preserve colors.
     // Colors are the only field the Planner can change; all other mission fields
@@ -606,18 +592,8 @@ async function commitToAPI() {
         timestamp, orig.helicopters ? JSON.stringify(orig.helicopters) : ''
       ];
     });
-    const mResp = await fetch(`${BASE_URL}?action=write&sheet=Missions`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'text/plain' },
-      body: JSON.stringify({ rows: missionRows }),
-      redirect: 'follow'
-    });
-    if (mResp.ok) {
-      const mResult = await mResp.json();
-      if (!mResult.success) console.warn('Mission write failed:', mResult);
-    }
 
-    // Commit rotation changes
+    // Rotation rows
     const rotRows = [];
     for (const p of PILOTS) {
       for (const r of (p.rot || [])) {
@@ -632,18 +608,8 @@ async function commitToAPI() {
         ]);
       }
     }
-    const rResp = await fetch(`${BASE_URL}?action=write&sheet=Rotations`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'text/plain' },
-      body: JSON.stringify({ rows: rotRows }),
-      redirect: 'follow'
-    });
-    if (rResp.ok) {
-      const rResult = await rResp.json();
-      if (!rResult.success) console.warn('Rotation write failed:', rResult);
-    }
 
-    // Commit pilot list (includes temp pilots)
+    // Pilot list rows (includes temp pilots)
     const pilotRows = PILOTS.map(p => [
       p.name,
       p.quals ? p.quals.join(', ') : '',
@@ -653,15 +619,87 @@ async function commitToAPI() {
       p.displayName || p.name,
       p.temp ? 'TRUE' : 'FALSE'
     ]);
-    const pResp = await fetch(`${BASE_URL}?action=write&sheet=Pilots`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'text/plain' },
-      body: JSON.stringify({ rows: pilotRows }),
-      redirect: 'follow'
-    });
-    if (pResp.ok) {
-      const pResult = await pResp.json();
-      if (!pResult.success) console.warn('Pilots write failed:', pResult);
+
+    // --- Atomic commit with stale-page guard ---
+    // One POST writes all tabs; the Apps Script rejects it if the Sheet's revision
+    // moved since this page loaded (someone else committed) — so a stale page can
+    // never overwrite newer commits. Falls back to the legacy per-tab writes
+    // (no guard) if the Apps Script hasn't been updated with commitAll yet.
+    let result = { success: true, rowsWritten: 0 };
+    let committedAtomic = false;
+    try {
+      const caResp = await fetch(`${BASE_URL}?action=commitAll`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'text/plain' },
+        body: JSON.stringify({
+          rev: SHEET_REV,
+          assignments: rows,
+          missions: missionRows,
+          rotations: rotRows,
+          pilots: pilotRows
+        }),
+        redirect: 'follow'
+      });
+      if (caResp.ok) {
+        const ca = await caResp.json();
+        if (ca && ca.stale) {
+          alert('⚠️ Someone committed changes after this page loaded, so your view is out of date.\n\nThe planner will now reload with the latest data — please re-apply your change and commit again.');
+          location.reload();
+          return new Promise(() => {}); // page is reloading; halt here
+        }
+        if (ca && ca.success) {
+          SHEET_REV = (ca.rev !== undefined && ca.rev !== null) ? Number(ca.rev) : SHEET_REV;
+          result = { success: true, rowsWritten: ca.rowsWritten || rows.length };
+          committedAtomic = true;
+        }
+      }
+    } catch (e) {
+      console.warn('commitAll unavailable — falling back to legacy per-tab writes:', e);
+    }
+
+    if (!committedAtomic) {
+      // Legacy path (pre-commitAll Apps Script): four per-tab replace writes, no stale guard.
+      if (rows.length > 0) {
+        const response = await fetch(`${BASE_URL}?action=write&sheet=Assignments`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'text/plain' },
+          body: JSON.stringify({ rows }),
+          redirect: 'follow'
+        });
+        if (!response.ok) throw new Error(`HTTP ${response.status}`);
+        result = await response.json();
+        if (!result.success) throw new Error('Assignments write failed');
+      }
+      const mResp = await fetch(`${BASE_URL}?action=write&sheet=Missions`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'text/plain' },
+        body: JSON.stringify({ rows: missionRows }),
+        redirect: 'follow'
+      });
+      if (mResp.ok) {
+        const mResult = await mResp.json();
+        if (!mResult.success) console.warn('Mission write failed:', mResult);
+      }
+      const rResp = await fetch(`${BASE_URL}?action=write&sheet=Rotations`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'text/plain' },
+        body: JSON.stringify({ rows: rotRows }),
+        redirect: 'follow'
+      });
+      if (rResp.ok) {
+        const rResult = await rResp.json();
+        if (!rResult.success) console.warn('Rotation write failed:', rResult);
+      }
+      const pResp = await fetch(`${BASE_URL}?action=write&sheet=Pilots`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'text/plain' },
+        body: JSON.stringify({ rows: pilotRows }),
+        redirect: 'follow'
+      });
+      if (pResp.ok) {
+        const pResult = await pResp.json();
+        if (!pResult.success) console.warn('Pilots write failed:', pResult);
+      }
     }
 
     // Update original state and clear dirty flag

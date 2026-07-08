@@ -1,5 +1,30 @@
 const SHEET_NAME = 'Pilot Planner Data';
 
+// --- Stale-page guard: Sheet revision counter (PlannerMeta!A1) ---
+// Every write bumps it; readAll returns it; commitAll rejects a commit whose
+// rev doesn't match (the page loaded before someone else's commit), so a stale
+// page can never overwrite newer data.
+const META_TAB = 'PlannerMeta';
+
+function getRev_() {
+ const ss = SpreadsheetApp.getActiveSpreadsheet();
+ let sh = ss.getSheetByName(META_TAB);
+ if (!sh) {
+ sh = ss.insertSheet(META_TAB);
+ sh.getRange('A1').setValue(0);
+ sh.getRange('B1').setValue('Planner revision counter — do not edit. Bumped on every write; rejects stale-page commits.');
+ sh.hideSheet();
+ }
+ const v = Number(sh.getRange('A1').getValue());
+ return isNaN(v) ? 0 : v;
+}
+
+function bumpRev_() {
+ const n = getRev_() + 1; // getRev_ ensures the tab exists
+ SpreadsheetApp.getActiveSpreadsheet().getSheetByName(META_TAB).getRange('A1').setValue(n);
+ return n;
+}
+
 function doGet(e) {
  const action = (e.parameter.action || 'readAll').toLowerCase();
  const ss = SpreadsheetApp.getActiveSpreadsheet();
@@ -19,6 +44,7 @@ function doGet(e) {
  const sheet = ss.getSheetByName(name);
  result[name.toLowerCase()] = sheet ? sheetToJson(sheet) : [];
  });
+ result.rev = getRev_(); // stale-page guard: page remembers this, sends it back on commitAll
  return jsonResponse(result);
  }
  return jsonResponse({error: 'Unknown action: ' + action});
@@ -68,7 +94,19 @@ function doPost(e) {
        results.push({action: 'appended', missionId: missionId});
      }
    }
+   bumpRev_(); // mission sync writes count as changes for the stale-page guard
    return jsonResponse({results: results});
+ }
+
+ // --- commitAll (atomic multi-tab write with stale-page guard) ---
+ if (action === 'commitall') {
+   var caBody;
+   try {
+     caBody = JSON.parse(e.postData.contents);
+   } catch (err) {
+     return jsonResponse({error: 'Invalid JSON: ' + err.message});
+   }
+   return jsonResponse(handleCommitAll(ss, caBody));
  }
 
  // --- write (full replace) ---
@@ -87,6 +125,7 @@ function doPost(e) {
  sheet.getRange(2, 1, rows.length, rows[0].length).setValues(rows);
  }
 
+ bumpRev_(); // legacy writers (old cached pages, scripts) still count as changes
  return jsonResponse({success: true, rowsWritten: rows.length, sheet: sheetName});
  }
 
@@ -102,6 +141,7 @@ function doPost(e) {
  if (!rows || !rows.length) return jsonResponse({error: 'No rows provided'});
 
  sheet.getRange(sheet.getLastRow() + 1, 1, rows.length, rows[0].length).setValues(rows);
+ bumpRev_();
  return jsonResponse({success: true, rowsAppended: rows.length, sheet: sheetName});
  }
 
@@ -117,6 +157,40 @@ function sheetToJson(sheet) {
  headers.forEach((h, i) => { obj[h] = row[i]; });
  return obj;
  });
+}
+
+// Atomic multi-tab replace, serialized by LockService, guarded by the rev counter.
+// Skips any tab whose rows array is empty (never clears a tab to nothing).
+function handleCommitAll(ss, body) {
+ const lock = LockService.getScriptLock();
+ lock.waitLock(20000);
+ try {
+ const current = getRev_();
+ if (body.rev === null || body.rev === undefined || Number(body.rev) !== current) {
+ return {success: false, stale: true, currentRev: current};
+ }
+ const writes = {
+ 'Assignments': body.assignments,
+ 'Missions': body.missions,
+ 'Rotations': body.rotations,
+ 'Pilots': body.pilots
+ };
+ let total = 0;
+ for (const tab in writes) {
+ const rows = writes[tab];
+ if (!rows || !rows.length) continue;
+ const sheet = ss.getSheetByName(tab);
+ if (!sheet) continue;
+ const last = sheet.getLastRow();
+ if (last > 1) sheet.getRange(2, 1, last - 1, sheet.getMaxColumns()).clearContent();
+ sheet.getRange(2, 1, rows.length, rows[0].length).setValues(rows);
+ total += rows.length;
+ }
+ const rev = bumpRev_();
+ return {success: true, rowsWritten: total, rev: rev};
+ } finally {
+ lock.releaseLock();
+ }
 }
 
 function jsonResponse(data) {
