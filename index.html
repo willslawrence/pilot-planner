@@ -1461,7 +1461,35 @@ function render(){
 }
 
 function secRow(label,color,td){
-  return `<div class="row sec-row"><div class="rlabel" style="color:${color}">${label}</div><div class="rbars" style="width:${tD()*DW}px"></div></div>`;
+  const t=tD();
+  // The topmost section (UAM) sits flush under the sticky main ruler, so its own
+  // date scale would overlap/mix with the ruler's — render just the label there.
+  if(label==='UAM Missions'){
+    return `<div class="row sec-row"><div class="rlabel" style="color:${color}">${label}</div><div class="rbars" style="width:${t*DW}px"></div></div>`;
+  }
+  // Other sections get a mini-ruler (month + day) so the scale stays readable
+  // after you scroll past the top ruler. Everything is positioned inside the
+  // (position:relative) .rbars, so left = i*DW aligns to the bars.
+  const MN=["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
+  let months='', c=new Date(T0);
+  while(c<T1){
+    const me=new Date(c.getFullYear(),c.getMonth()+1,0);
+    const e=me>T1?T1:me;
+    const s=dO(c), days=dO(e)-s+1;
+    months+=`<div style="position:absolute;left:${s*DW}px;top:0;height:12px;width:${days*DW}px;display:flex;align-items:center;justify-content:center;font-size:8px;font-weight:700;color:var(--muted);border-right:1px solid rgba(128,128,128,.25);pointer-events:none">${MN[c.getMonth()]}</div>`;
+    c=new Date(c.getFullYear(),c.getMonth()+1,1);
+  }
+  let cells='', wk=0;
+  for(let i=0;i<t;i++){
+    const dt=new Date(T0);dt.setDate(dt.getDate()+i);
+    const dow=dt.getDay();
+    const isFri=dow===5, isWeekend=dow===5||dow===6;
+    if(isFri) wk++;   // week band flips at each Friday, matching the week-divider borders
+    const border=isFri?'border-left:2px solid var(--sun-border-color);':'';
+    const bg = wk%2 ? 'background:rgba(128,128,128,.15);' : '';   // slight alternating week band
+    cells+=`<div style="position:absolute;left:${i*DW}px;top:12px;bottom:0;width:${DW}px;display:flex;align-items:center;justify-content:center;font-size:8px;line-height:1;color:${isWeekend?'var(--accent)':'var(--muted)'};${border}${bg};pointer-events:none">${dt.getDate()}</div>`;
+  }
+  return `<div class="row sec-row" style="min-height:29px"><div class="rlabel" style="color:${color}">${label}</div><div class="rbars" style="width:${t*DW}px;height:29px">${months}${cells}</div></div>`;
 }
 
 function missionRows(m,td){
@@ -1577,14 +1605,19 @@ function missionRows(m,td){
 function adHocRows(missions,td){
   if(!missions.length) return '';
   let h='';
-  const sorted=[...missions].sort((a,b)=>a.start.localeCompare(b.start));
+  // Longest missions first → they take the top lanes; shorter missions then
+  // bin-pack into the lanes below, so short non-overlapping ones share rows
+  // instead of each reserving its own (cuts the wasted vertical space).
+  const _dur=m=>dO(D(m.end))-dO(D(m.start));
+  const sorted=[...missions].sort((a,b)=> _dur(b)-_dur(a) || a.start.localeCompare(b.start));
   // Bin-pack: non-overlapping missions share lanes
   const lanes=[];
   for(const m of sorted){
     let placed=false;
     for(const lane of lanes){
-      const last=lane[lane.length-1];
-      if(m.start>last.end){lane.push(m);placed=true;break;}
+      // fits if it doesn't overlap ANY mission already in the lane
+      // (missions are no longer in start order, so check them all)
+      if(lane.every(x => m.start>x.end || m.end<x.start)){lane.push(m);placed=true;break;}
     }
     if(!placed) lanes.push([m]);
   }
@@ -1595,8 +1628,10 @@ function adHocRows(missions,td){
     const maxHc=Math.max(...lane.map(m=>m.hc));
     const totalH=titleH+heliH*maxHc;
     let labelHtml=`<div style="display:flex;flex-direction:column;height:100%">`;
-    const laneNames=lane.map(m=>m.name).join(' · ');
-    labelHtml+=`<div style="font-weight:600;font-size:9px;color:var(--red);height:${titleH}px;display:flex;align-items:center;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${laneNames}">${laneNames}</div>`;
+    // No mission name in the far-left label — the bar carries its own name, and a
+    // lane's mission may sit far to the right, so a left label is disconnected.
+    // Keep an empty title-height spacer so the 🚁 rows stay aligned to the bars.
+    labelHtml+=`<div style="height:${titleH}px"></div>`;
     for(let hi=0;hi<maxHc;hi++){
       labelHtml+=`<div style="font-size:9px;color:var(--muted);height:${heliH}px;display:flex;align-items:center;padding-left:8px">🚁 ${maxHc>1?(hi+1):''}</div>`;
     }
