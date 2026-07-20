@@ -1280,9 +1280,9 @@ function monthsHtml(td){
     const dt=new Date(T0);dt.setDate(dt.getDate()+i);
     const day=dt.getDate();
     const dow=dt.getDay();
-    const isFri=dow===5;
+    const isSun=dow===0;
     const isWeekend=dow===5||dow===6;
-    const border=isFri?'border-left:2px solid var(--sun-border-color);':'';
+    const border=isSun?'border-left:2px solid var(--sun-border-color);':'';
     const bg=isWeekend?'background:rgba(255,255,255,.03);':'';
     dRow+=`<div style="position:absolute;left:${LW+i*DW}px;width:${DW}px;height:16px;display:flex;align-items:center;justify-content:center;font-size:8px;color:${isWeekend?'var(--accent)':'var(--muted)'};${border}${bg}">${day}</div>`;
   }
@@ -1304,11 +1304,11 @@ function weekOverlays(td){
   // No full-height week overlays — week lines are drawn on individual bars instead
   return '';
 }
-// Generate week tick positions (Fridays) as pixel offsets for drawing on bars
+// Generate week tick positions (Sundays) as pixel offsets for drawing on bars
 function getWeekTicks(){
   const ticks=[];
   let c=new Date(T0);
-  while(c.getDay()!==5) c.setDate(c.getDate()+1);
+  while(c.getDay()!==0) c.setDate(c.getDate()+1);
   while(c<T1){
     ticks.push(dO(c)*DW);
     c.setDate(c.getDate()+7);
@@ -1483,9 +1483,9 @@ function secRow(label,color,td){
   for(let i=0;i<t;i++){
     const dt=new Date(T0);dt.setDate(dt.getDate()+i);
     const dow=dt.getDay();
-    const isFri=dow===5, isWeekend=dow===5||dow===6;
-    if(isFri) wk++;   // week band flips at each Friday, matching the week-divider borders
-    const border=isFri?'border-left:2px solid var(--sun-border-color);':'';
+    const isSun=dow===0, isWeekend=dow===5||dow===6;
+    if(isSun) wk++;   // week band flips at each Sunday, so the Fri/Sat weekend sits at the end of the band
+    const border=isSun?'border-left:2px solid var(--sun-border-color);':'';
     const bg = wk%2 ? 'background:rgba(128,128,128,.15);' : '';   // slight alternating week band
     cells+=`<div style="position:absolute;left:${i*DW}px;top:12px;bottom:0;width:${DW}px;display:flex;align-items:center;justify-content:center;font-size:8px;line-height:1;color:${isWeekend?'var(--accent)':'var(--muted)'};${border}${bg};pointer-events:none">${dt.getDate()}</div>`;
   }
