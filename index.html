@@ -1418,7 +1418,7 @@ function render(){
   }
   if(todayOff>=0 && todayOff<td){
     const todayX=LW+todayOff*DW;
-    html+=`<div style="position:absolute;top:0;bottom:0;left:${todayX}px;width:2px;background:#2196F3;z-index:12;pointer-events:none;opacity:.7"></div>`;
+    html+=`<div style="position:absolute;top:0;bottom:0;left:${todayX}px;width:${DW}px;background:rgba(33,150,243,.22);z-index:12;pointer-events:none"></div>`;
   }
   // New Year vertical lines
   for(let yr=T0.getFullYear()+1; yr<=2027; yr++){
