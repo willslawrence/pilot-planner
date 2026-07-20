@@ -783,36 +783,18 @@ function buildRotationsForPilot(pilotName, rotations, isManagement) {
       });
       return [{ s: s, e: e > '2027-12-31' ? '2027-12-31' : e, st: 'ON' }, ...specials].sort((a,b)=>a.s.localeCompare(b.s));
     }
-    // Sheet has full rotation data — use as-is, then extrapolate into 2027
+    // Sheet has full rotation data — use it VERBATIM.
+    // (Removed 2026-07-20: the 42-day auto-extrapolation that used to stretch the
+    // last block and tile alternating ON/OFF blocks into 2027. Rosters are now fully
+    // populated in the Sheet, so re-generating them on every load was non-idempotent —
+    // it overwrote hand edits and drifted other pilots' dates across save/reload.
+    // Blocks now round-trip losslessly. Initial Fleetplan fill still lives in the
+    // OFF-only fallback below, which only runs for pilots with no explicit blocks.)
     const blocks = pilotRotations.map(r => {
       const rot = { s: r.start, e: r.end, st: r.type };
       if(r.note) rot.note = r.note;
       return rot;
     }).sort((a, b) => a.s.localeCompare(b.s));
-    const extEnd = '2027-12-31';
-    const last = blocks[blocks.length - 1];
-    if (last && last.e < extEnd && (last.st === 'ON' || last.st === 'OFF')) {
-      if (isManagement) {
-        // Management pilots: always ON in extrapolated period
-        last.e = extEnd;
-      } else {
-        // Complete the last block to its full 42 days first
-        const lastDays = dB(D(last.s), D(last.e));
-        if (lastDays < 42) {
-          last.e = addDaysL(last.s, 41);
-          if (last.e > extEnd) last.e = extEnd;
-        }
-        // Then alternate 42-day blocks
-        let nextSt = last.st === 'OFF' ? 'ON' : 'OFF';
-        let curDate = addDaysL(last.e, 1);
-        while (curDate <= extEnd) {
-          const blockEnd = addDaysL(curDate, 41);
-          blocks.push({ s: curDate, e: blockEnd > extEnd ? extEnd : blockEnd, st: nextSt });
-          curDate = addDaysL(blockEnd > extEnd ? extEnd : blockEnd, 1);
-          nextSt = nextSt === 'OFF' ? 'ON' : 'OFF';
-        }
-      }
-    }
     return blocks;
   }
   
