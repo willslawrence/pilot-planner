@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Pilot Availability Planner v3.73 — THC H125</title>
+<title>Pilot Availability Planner v3.79 — THC H125</title>
 <style>
 :root {
   --bg: #0f1123;
@@ -230,7 +230,7 @@ body.has-pilot-focus .p-row.pilot-focused .pname { font-weight:700; color:var(--
   <div class="leg"><input type="color" id="cc-training" style="width:14px;height:14px;border:none;padding:0;cursor:pointer;border-radius:2px" onchange="ROT_COLORS.training=this.value;saveRotColors();render()"> Training</div>
   <div class="leg"><input type="color" id="cc-available" style="width:14px;height:14px;border:none;padding:0;cursor:pointer;border-radius:2px" onchange="ROT_COLORS.available=this.value;saveRotColors();render()"> Available</div>
   <div class="leg"><div class="lsw" style="background:var(--yellow)"></div> Cursor</div>
-  <span id="app-version" style="font-size:10px;opacity:.5;cursor:pointer;margin-left:4px;user-select:none">v3.78</span>
+  <span id="app-version" style="font-size:10px;opacity:.5;cursor:pointer;margin-left:4px;user-select:none">v3.79</span>
   <span id="legend-hint" style="margin-left:auto;font-size:10px">Add a note about 'Vacation' or 'Availability' with the + Add Rotation button.</span>
 </div>
 
@@ -1117,8 +1117,14 @@ function addDaysL(dateStr, n){
 // Get day of week for a date string (LOCAL) — 0=Sun..6=Sat, 5=Fri
 function dowL(dateStr){ return D(dateStr).getDay(); }
 
-// Day difference (b - a) in days
-function dB(a,b){ return Math.round((b.getTime()-a.getTime())/864e5); }
+// Strip time-of-day — a Date at LOCAL midnight of the same calendar day
+function dayStart(dt){ return new Date(dt.getFullYear(), dt.getMonth(), dt.getDate()); }
+
+// Day difference (b - a) in CALENDAR days.
+// Both ends are normalised to local midnight first: `new Date()` carries the
+// current time, and without this any afternoon (fraction >= .5) rounded up and
+// put TODAY on tomorrow's column.
+function dB(a,b){ return Math.round((dayStart(b).getTime()-dayStart(a).getTime())/864e5); }
 
 // Day offset from T0
 function dO(dt){ return dB(T0,dt); }
@@ -2145,6 +2151,9 @@ function setupPilotRowClicks(){
 function drawHandoffLines(){
   const svg=document.getElementById('handoff-svg');
   if(!svg) return;
+  // Handoff lines are an admin-only planning aid — viewers just see the bars.
+  // Clear (don't return early) so they disappear when admin mode is toggled off.
+  if(!adminMode){ svg.innerHTML=''; svg.setAttribute('height',1); return; }
   const wrap=document.getElementById('content-wrap');
   const wrapRect=wrap.getBoundingClientRect();
 
@@ -2564,7 +2573,7 @@ function setupDrops(){
 }
 
 // ====== CONTROLS ======
-function goToday(){sel=new Date();render();scr();}
+function goToday(){sel=dayStart(new Date());render();scr();}
 function shf(d){sel.setDate(sel.getDate()+d);render();scr();}
 function setD(v){if(v){sel=D(v);render();scr();}}
 function scr(){const ms=document.getElementById('mscroll');ms.scrollLeft=Math.max(0,LW+dO(sel)*DW-ms.clientWidth/2);}
@@ -2781,7 +2790,7 @@ function saveAddPilot(){
 function addM(type){type=type||'UAM';const TC={"UAM":["#87CEEB","#5BA3CF","#3A7CA5","#1a3a6b"],"Survey":["#FF8C00","#E65100","#F57C00","#EF6C00"],"Rally":["#ef5350","#e53935","#c62828","#b71c1c"],"Training":["#FF9800","#F57C00","#EF6C00","#E65100"]};const C=TC[type]||TC.UAM;MISSIONS.push({id:nid++,name:"New "+type+" Mission",type:type,start:F(sel),end:addDaysL(F(sel),90),hc:1,color:C[MISSIONS.filter(m=>m.type===type).length%C.length]});render();}
 
 // ====== INIT ======
-const now=new Date();sel=(now>=T0&&now<=T1)?now:new Date(T0);
+const now=dayStart(new Date());sel=(now>=T0&&now<=T1)?now:new Date(T0);
 
 // Warn on page unload if there are uncommitted changes
 window.addEventListener('beforeunload', (e) => {
