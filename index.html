@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Pilot Availability Planner v3.83 — THC H125</title>
+<title>Pilot Availability Planner v3.84 — THC H125</title>
 <style>
 :root {
   --bg: #0f1123;
@@ -236,7 +236,7 @@ body.has-pilot-focus .p-row.pilot-focused .pname { font-weight:700; color:var(--
   <div class="leg"><input type="color" id="cc-training" style="width:14px;height:14px;border:none;padding:0;cursor:pointer;border-radius:2px" onchange="ROT_COLORS.training=this.value;saveRotColors();render()"> Training</div>
   <div class="leg"><input type="color" id="cc-available" style="width:14px;height:14px;border:none;padding:0;cursor:pointer;border-radius:2px" onchange="ROT_COLORS.available=this.value;saveRotColors();render()"> Available</div>
   <div class="leg"><div class="lsw" style="background:var(--yellow)"></div> Cursor</div>
-  <span id="app-version" style="font-size:10px;opacity:.5;cursor:pointer;margin-left:4px;user-select:none">v3.83</span>
+  <span id="app-version" style="font-size:10px;opacity:.5;cursor:pointer;margin-left:4px;user-select:none">v3.84</span>
   <span id="legend-hint" style="margin-left:auto;font-size:10px">Add a note about 'Vacation' or 'Availability' with the + Add Rotation button.</span>
 </div>
 
@@ -1768,7 +1768,10 @@ function pilotRow(p,td,ds){
   }
   const daysOnLabel=`<span style="position:absolute;right:4px;top:50%;transform:translateY(-50%);font-size:9px;font-weight:700;color:var(--muted);z-index:5;background:var(--bg);padding:0 3px;border-radius:2px">${daysOnCount}d</span>`;
   const catColor=gc(g);
-  const labelStyle=on?`background:${ROT_COLORS.on};border-left:3px solid ${ROT_COLORS.on};color:#fff;font-weight:700`:`background:var(--surface);border-left:3px solid ${catColor};color:${catColor};font-weight:400;opacity:.85`;
+  // No opacity on the label: .rlabel is the sticky left column, so any transparency
+  // lets the rotation bars scroll visibly underneath the pilot's name. Off-rotation
+  // pilots are already distinguished by the muted catColor text + --surface fill.
+  const labelStyle=on?`background:${ROT_COLORS.on};border-left:3px solid ${ROT_COLORS.on};color:#fff;font-weight:700`:`background:var(--surface);border-left:3px solid ${catColor};color:${catColor};font-weight:400`;
   const safePN=p.name.replace(/'/g,"\\'");
   const rowCls=`row p-row${p.dualRated?' dual-rated':''}${HIDDEN_PILOTS.has(p.name)?' pilot-hidden':''}`;
   const hideCb=`<input type="checkbox" class="row-hide-cb" ${HIDDEN_PILOTS.has(p.name)?'checked':''} onclick="event.stopPropagation();toggleHidePilot('${safePN}',this)" title="Hide this row">`;
