@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Pilot Availability Planner v3.81 — THC H125</title>
+<title>Pilot Availability Planner v3.83 — THC H125</title>
 <style>
 :root {
   --bg: #0f1123;
@@ -236,7 +236,7 @@ body.has-pilot-focus .p-row.pilot-focused .pname { font-weight:700; color:var(--
   <div class="leg"><input type="color" id="cc-training" style="width:14px;height:14px;border:none;padding:0;cursor:pointer;border-radius:2px" onchange="ROT_COLORS.training=this.value;saveRotColors();render()"> Training</div>
   <div class="leg"><input type="color" id="cc-available" style="width:14px;height:14px;border:none;padding:0;cursor:pointer;border-radius:2px" onchange="ROT_COLORS.available=this.value;saveRotColors();render()"> Available</div>
   <div class="leg"><div class="lsw" style="background:var(--yellow)"></div> Cursor</div>
-  <span id="app-version" style="font-size:10px;opacity:.5;cursor:pointer;margin-left:4px;user-select:none">v3.81</span>
+  <span id="app-version" style="font-size:10px;opacity:.5;cursor:pointer;margin-left:4px;user-select:none">v3.83</span>
   <span id="legend-hint" style="margin-left:auto;font-size:10px">Add a note about 'Vacation' or 'Availability' with the + Add Rotation button.</span>
 </div>
 
@@ -1277,11 +1277,15 @@ function monthsHtml(td){
     c=new Date(c.getFullYear(),c.getMonth()+1,1);
   }
   // Month row
+  // top:0 on every absolutely-positioned cell below is load-bearing. Without it they
+  // fall back to their static position, which sits *after* the in-flow .rlabel spacer —
+  // so each cell drops by the spacer's height, spills out of the sticky header and
+  // collides with the section labels underneath (worst on mobile). Fixed 2026-08-17.
   let mRow=`<div class="rlabel" style="height:18px;font-weight:700;font-size:10px"></div>`;
   for(let mi=0;mi<months.length;mi++){
     const m=months[mi];
     const altBg = mi%2===1 ? 'background:var(--month-alt);' : '';
-    mRow+=`<div style="position:absolute;left:${LW+m.start*DW}px;width:${m.days*DW}px;height:18px;display:flex;align-items:center;justify-content:center;font-size:10px;font-weight:700;color:var(--muted);border-right:1px solid rgba(45,50,88,.4);${altBg}">${m.name}</div>`;
+    mRow+=`<div style="position:absolute;top:0;left:${LW+m.start*DW}px;width:${m.days*DW}px;height:18px;display:flex;align-items:center;justify-content:center;font-size:10px;font-weight:700;color:var(--muted);border-right:1px solid rgba(45,50,88,.4);${altBg}">${m.name}</div>`;
   }
   // Date row
   let dRow=`<div class="rlabel" style="height:16px"></div>`;
@@ -1293,7 +1297,7 @@ function monthsHtml(td){
     const isWeekend=dow===5||dow===6;
     const border=isSun?'border-left:2px solid var(--sun-border-color);':'';
     const bg=isWeekend?'background:rgba(255,255,255,.03);':'';
-    dRow+=`<div style="position:absolute;left:${LW+i*DW}px;width:${DW}px;height:16px;display:flex;align-items:center;justify-content:center;font-size:8px;color:${isWeekend?'var(--accent)':'var(--muted)'};${border}${bg}">${day}</div>`;
+    dRow+=`<div style="position:absolute;top:0;left:${LW+i*DW}px;width:${DW}px;height:16px;display:flex;align-items:center;justify-content:center;font-size:8px;color:${isWeekend?'var(--accent)':'var(--muted)'};${border}${bg}">${day}</div>`;
   }
   // Past shading + Today marker in month row
   const todayHeaderOff=dO(new Date());
