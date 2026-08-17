@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Pilot Availability Planner v3.80 — THC H125</title>
+<title>Pilot Availability Planner v3.81 — THC H125</title>
 <style>
 :root {
   --bg: #0f1123;
@@ -134,7 +134,11 @@ body.hide-available .duty-blk.available-workover { display:none!important; }
 .cur-drag { position:absolute; top:0; width:14px; height:100%; z-index:17; cursor:ew-resize; transform:translateX(-6px); }
 
 .legend { padding:5px 16px; border-top:1px solid var(--border); font-size:10px; color:var(--muted); display:flex; gap:12px; flex-wrap:wrap; flex-shrink:0; align-items:center; }
-.leg { display:flex; align-items:center; gap:3px; }
+/* The colour legend items double as the admin colour pickers. They're chrome,
+   not information — hide them by default so the footer is just the hint + the
+   version badge. Admin gets them back on desktop; mobile never shows them. */
+.leg { display:none; }
+body:not(.viewer-mode) .leg { display:flex; align-items:center; gap:3px; }
 .lsw { width:14px; height:8px; border-radius:2px; }
 
 .toggle { display:flex; align-items:center; gap:4px; cursor:pointer; user-select:none; }
@@ -186,6 +190,11 @@ body.has-pilot-focus .p-row.pilot-focused .pname { font-weight:700; color:var(--
   .header { padding-top:max(8px, env(safe-area-inset-top)); padding-left:12px; padding-right:12px; }
   .header h1 { font-size:14px; }
   .rlabel { min-width:110px; width:110px; padding:0 6px; }
+  /* Footer real estate is scarce on a phone — no colour legend, even in admin,
+     and the hint sits inline with the version rather than pushed to its own row. */
+  body:not(.viewer-mode) .leg { display:none; }
+  .legend { padding:4px 12px; gap:6px; }
+  #legend-hint { margin-left:0!important; }
 }
 </style>
 </head>
@@ -227,7 +236,7 @@ body.has-pilot-focus .p-row.pilot-focused .pname { font-weight:700; color:var(--
   <div class="leg"><input type="color" id="cc-training" style="width:14px;height:14px;border:none;padding:0;cursor:pointer;border-radius:2px" onchange="ROT_COLORS.training=this.value;saveRotColors();render()"> Training</div>
   <div class="leg"><input type="color" id="cc-available" style="width:14px;height:14px;border:none;padding:0;cursor:pointer;border-radius:2px" onchange="ROT_COLORS.available=this.value;saveRotColors();render()"> Available</div>
   <div class="leg"><div class="lsw" style="background:var(--yellow)"></div> Cursor</div>
-  <span id="app-version" style="font-size:10px;opacity:.5;cursor:pointer;margin-left:4px;user-select:none">v3.80</span>
+  <span id="app-version" style="font-size:10px;opacity:.5;cursor:pointer;margin-left:4px;user-select:none">v3.81</span>
   <span id="legend-hint" style="margin-left:auto;font-size:10px">Add a note about 'Vacation' or 'Availability' with the + Add Rotation button.</span>
 </div>
 
