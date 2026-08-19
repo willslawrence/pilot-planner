@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Pilot Availability Planner v3.84 — THC H125</title>
+<title>Pilot Availability Planner v3.85 — THC H125</title>
 <style>
 :root {
   --bg: #0f1123;
@@ -236,7 +236,7 @@ body.has-pilot-focus .p-row.pilot-focused .pname { font-weight:700; color:var(--
   <div class="leg"><input type="color" id="cc-training" style="width:14px;height:14px;border:none;padding:0;cursor:pointer;border-radius:2px" onchange="ROT_COLORS.training=this.value;saveRotColors();render()"> Training</div>
   <div class="leg"><input type="color" id="cc-available" style="width:14px;height:14px;border:none;padding:0;cursor:pointer;border-radius:2px" onchange="ROT_COLORS.available=this.value;saveRotColors();render()"> Available</div>
   <div class="leg"><div class="lsw" style="background:var(--yellow)"></div> Cursor</div>
-  <span id="app-version" style="font-size:10px;opacity:.5;cursor:pointer;margin-left:4px;user-select:none">v3.84</span>
+  <span id="app-version" style="font-size:10px;opacity:.5;cursor:pointer;margin-left:4px;user-select:none">v3.85</span>
   <span id="legend-hint" style="margin-left:auto;font-size:10px">Add a note about 'Vacation' or 'Availability' with the + Add Rotation button.</span>
 </div>
 
@@ -648,6 +648,11 @@ async function commitToAPI() {
     }
 
     // Pilot list rows (includes temp pilots)
+    // NOTE: commitAll clears the FULL width of every data row before writing these back,
+    // so this array must be as wide as the Pilots tab. DualRated (column H) is read at
+    // load (see buildPilots) but used to be omitted here — every commit therefore blanked
+    // it and dropped the dual-rated pilots out of their section until the Obsidian sync
+    // happened to run again. A clear-then-write must write every column it clears.
     const pilotRows = PILOTS.map(p => [
       p.name,
       p.quals ? p.quals.join(', ') : '',
@@ -655,7 +660,8 @@ async function commitToAPI() {
       p.pairGroup || '',
       p.management ? 'TRUE' : 'FALSE',
       p.displayName || p.name,
-      p.temp ? 'TRUE' : 'FALSE'
+      p.temp ? 'TRUE' : 'FALSE',
+      p.dualRated ? 'TRUE' : ''
     ]);
 
     // --- Atomic commit with stale-page guard ---
