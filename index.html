@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Pilot Availability Planner v3.87 — THC H125</title>
+<title>Pilot Availability Planner v3.88 — THC H125</title>
 <style>
 :root {
   --bg: #0f1123;
@@ -241,7 +241,7 @@ body.has-pilot-focus .p-row.pilot-focused .pname { font-weight:700; color:var(--
   <div class="leg"><input type="color" id="cc-proposedOn" style="width:14px;height:14px;border:none;padding:0;cursor:pointer;border-radius:2px" onchange="ROT_COLORS.proposedOn=this.value;saveRotColors();render()"> Proposed On</div>
   <div class="leg"><input type="color" id="cc-proposedOff" style="width:14px;height:14px;border:none;padding:0;cursor:pointer;border-radius:2px" onchange="ROT_COLORS.proposedOff=this.value;saveRotColors();render()"> Proposed Off</div>
   <div class="leg"><div class="lsw" style="background:var(--yellow)"></div> Cursor</div>
-  <span id="app-version" style="font-size:10px;opacity:.5;cursor:pointer;margin-left:4px;user-select:none">v3.87</span>
+  <span id="app-version" style="font-size:10px;opacity:.5;cursor:pointer;margin-left:4px;user-select:none">v3.88</span>
   <span id="legend-hint" style="margin-left:auto;font-size:10px">Add a note about 'Vacation' or 'Availability' with the + Add Rotation button.</span>
 </div>
 
@@ -519,12 +519,7 @@ async function fetchFromAPI() {
     
     // Convert rotations to the pilot rot format
     for (const pilot of PILOTS) {
-      pilot.rot = buildRotationsForPilot(pilot.name, ROTATIONS, pilot.management);
-      // The management collapse is a VIEW (one continuous ON bar), not roster truth.
-      // Keep the real blocks so commitToAPI writes those back instead of flattening the
-      // Sheet to a single row — otherwise ticking Management on a pilot who already has a
-      // roster destroys it irreversibly on the next commit.
-      pilot.rotRaw = pilot.management ? buildRotationsForPilot(pilot.name, ROTATIONS, false) : null;
+      pilot.rot = buildRotationsForPilot(pilot.name, ROTATIONS);
     }
     
     MISSIONS = data.missions.filter(mission => mission.MissionID && mission.Name).map(mission => {
@@ -653,7 +648,7 @@ async function commitToAPI() {
     // Rotation rows
     const rotRows = [];
     for (const p of PILOTS) {
-      for (const r of (p.rotRaw || p.rot || [])) {
+      for (const r of (p.rot || [])) {
         rotRows.push([
           p.name,
           r.st || 'OFF',
@@ -797,7 +792,13 @@ function parseDateFromISO(isoString) {
   return `${d.getUTCFullYear()}-${String(d.getUTCMonth()+1).padStart(2,'0')}-${String(d.getUTCDate()).padStart(2,'0')}`;
 }
 
-function buildRotationsForPilot(pilotName, rotations, isManagement) {
+// `Management` drives the pilot's COLOUR only (see pg() -> 'mg'). It deliberately does NOT
+// reshape the roster: management pilots are edited exactly like rotational pilots, and if they
+// want one long ON bar they get one because that is what is IN the Sheet, not because the app
+// synthesised it. The old auto-collapse squashed every block into a single ON span and the next
+// commit wrote that over the real rows — it destroyed Dermot Fahy's and Ivona Redlinska's
+// rosters. Removed 2026-08-23 (Will). See brain/Gotchas.md.
+function buildRotationsForPilot(pilotName, rotations) {
   const pilotRotations = rotations.filter(r => r.pilot === pilotName);
   
   // If the sheet has explicit rotation blocks (ON/OFF/WORKOVER/VACATION_EXTRA),
@@ -807,19 +808,6 @@ function buildRotationsForPilot(pilotName, rotations, isManagement) {
   );
   
   if (hasExplicitBlocks) {
-    // Management pilots: collapse everything into a single ON block
-    if (isManagement) {
-      const allDates = pilotRotations.map(r => [r.start, r.end]).flat().filter(d=>d).sort();
-      const s = allDates[0] || '2026-01-01';
-      const e = allDates[allDates.length-1] || '2027-12-31';
-      // Keep non-ON/OFF blocks (vacations etc) but make everything else ON
-      const specials = pilotRotations.filter(r => r.type !== 'ON' && r.type !== 'OFF').map(r => {
-        const rot = { s: r.start, e: r.end, st: r.type };
-        if(r.note) rot.note = r.note;
-        return rot;
-      });
-      return [{ s: s, e: e > '2027-12-31' ? '2027-12-31' : e, st: 'ON' }, ...specials].sort((a,b)=>a.s.localeCompare(b.s));
-    }
     // Sheet has full rotation data — use it VERBATIM.
     // (Removed 2026-07-20: the 42-day auto-extrapolation that used to stretch the
     // last block and tile alternating ON/OFF blocks into 2027. Rosters are now fully
@@ -886,11 +874,7 @@ function buildRotationsForPilot(pilotName, rotations, isManagement) {
     // Step 2: the last block (ON or OFF) may be incomplete — complete it to 42 days, then continue
     const lastRot = result[result.length - 1];
     if (lastRot.e < yearEnd) {
-      if (isManagement) {
-        // Management pilots: always ON in extrapolated period
-        lastRot.e = yearEnd;
-        lastRot.st = 'ON';
-      } else {
+      {
         // Calculate how many days the last block spans
         const lastDays = dB(D(lastRot.s), D(lastRot.e));
         const remaining = 42 - lastDays;
@@ -2721,7 +2705,7 @@ function showAddPilotPop(e){
     <label>Type</label>
     <select id="ap-type" onchange="togglePilotTypeFields()">
       <option value="rotational">Rotational (6-week ON/OFF)</option>
-      <option value="management">Management (always ON)</option>
+      <option value="management">Management (seeds one ON block)</option>
       <option value="temp">Temp (single ON block)</option>
     </select>
     <label>Name</label><input id="ap-name" placeholder="Full Name">
