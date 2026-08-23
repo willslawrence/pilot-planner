@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Pilot Availability Planner v3.86 — THC H125</title>
+<title>Pilot Availability Planner v3.87 — THC H125</title>
 <style>
 :root {
   --bg: #0f1123;
@@ -241,7 +241,7 @@ body.has-pilot-focus .p-row.pilot-focused .pname { font-weight:700; color:var(--
   <div class="leg"><input type="color" id="cc-proposedOn" style="width:14px;height:14px;border:none;padding:0;cursor:pointer;border-radius:2px" onchange="ROT_COLORS.proposedOn=this.value;saveRotColors();render()"> Proposed On</div>
   <div class="leg"><input type="color" id="cc-proposedOff" style="width:14px;height:14px;border:none;padding:0;cursor:pointer;border-radius:2px" onchange="ROT_COLORS.proposedOff=this.value;saveRotColors();render()"> Proposed Off</div>
   <div class="leg"><div class="lsw" style="background:var(--yellow)"></div> Cursor</div>
-  <span id="app-version" style="font-size:10px;opacity:.5;cursor:pointer;margin-left:4px;user-select:none">v3.86</span>
+  <span id="app-version" style="font-size:10px;opacity:.5;cursor:pointer;margin-left:4px;user-select:none">v3.87</span>
   <span id="legend-hint" style="margin-left:auto;font-size:10px">Add a note about 'Vacation' or 'Availability' with the + Add Rotation button.</span>
 </div>
 
@@ -494,8 +494,12 @@ async function fetchFromAPI() {
       displayName: pilot.DisplayName || pilot.Name,
       fleetplanID: pilot.FleetplanID,
       pairGroup: pilot.PairGroup,
-      management: pilot.Management,
-      mg: pilot.Management ? 1 : 0,
+      // Coerce exactly like Temp/DualRated below. Read RAW this was a live data-loss bug:
+      // a cell holding the TEXT "FALSE" is a non-empty string -> truthy -> the pilot is
+      // treated as management, their roster is collapsed to one ON block, and the next
+      // commit writes that collapse back over their real blocks. (Dermot Fahy, 2026-08-23.)
+      management: pilot.Management === true || pilot.Management === 'TRUE',
+      mg: (pilot.Management === true || pilot.Management === 'TRUE') ? 1 : 0,
       temp: pilot.Temp === true || pilot.Temp === 'TRUE',
       dualRated: pilot.DualRated === true || pilot.DualRated === 'TRUE' || pilot.DualRated === 'Yes',
       rot: [], // Will be populated from rotations data
@@ -516,6 +520,11 @@ async function fetchFromAPI() {
     // Convert rotations to the pilot rot format
     for (const pilot of PILOTS) {
       pilot.rot = buildRotationsForPilot(pilot.name, ROTATIONS, pilot.management);
+      // The management collapse is a VIEW (one continuous ON bar), not roster truth.
+      // Keep the real blocks so commitToAPI writes those back instead of flattening the
+      // Sheet to a single row — otherwise ticking Management on a pilot who already has a
+      // roster destroys it irreversibly on the next commit.
+      pilot.rotRaw = pilot.management ? buildRotationsForPilot(pilot.name, ROTATIONS, false) : null;
     }
     
     MISSIONS = data.missions.filter(mission => mission.MissionID && mission.Name).map(mission => {
@@ -644,7 +653,7 @@ async function commitToAPI() {
     // Rotation rows
     const rotRows = [];
     for (const p of PILOTS) {
-      for (const r of (p.rot || [])) {
+      for (const r of (p.rotRaw || p.rot || [])) {
         rotRows.push([
           p.name,
           r.st || 'OFF',
