@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Pilot Availability Planner v3.85 — THC H125</title>
+<title>Pilot Availability Planner v3.86 — THC H125</title>
 <style>
 :root {
   --bg: #0f1123;
@@ -123,7 +123,9 @@ body.simulate-mode .sim-banner { display:block; }
 
 .pa-block { position:absolute; top:7px; height:13px; border-radius:3px; display:flex; align-items:center; padding:0 4px; font-size:7px; font-weight:700; color:#fff; z-index:3; overflow:hidden; white-space:nowrap; text-overflow:ellipsis; border:1px solid rgba(255,255,255,.25); cursor:pointer; letter-spacing:.3px; }
 body.hide-coverage .pa-block { display:none!important; }
+.duty-blk.proposed-on, .duty-blk.proposed-off { opacity:.95; z-index:3; top:5px!important; bottom:5px!important; height:auto!important; border-radius:3px; background-image:repeating-linear-gradient(45deg,transparent,transparent 3px,rgba(255,255,255,.22) 3px,rgba(255,255,255,.22) 6px); box-shadow:0 0 0 1px rgba(255,255,255,.35) inset; }
 body.hide-available .duty-blk.available-workover { display:none!important; }
+body.hide-proposed .duty-blk.proposed-on, body.hide-proposed .duty-blk.proposed-off { display:none!important; }
 
 .week-shade { position:absolute; top:0; bottom:0; background:var(--week-shade); pointer-events:none; z-index:0; }
 .sun-border { position:absolute; top:0; bottom:0; width:2px; background:var(--sun-border-color); pointer-events:none; z-index:1; }
@@ -207,6 +209,7 @@ body.has-pilot-focus .p-row.pilot-focused .pname { font-weight:700; color:var(--
     <label class="toggle admin-only-toggle" title="Toggle pilot coverage on roster rows"><input type="checkbox" id="covToggle" checked onchange="toggleCoverage()"><span class="toggle-slider"></span><span class="toggle-lbl">Roster Coverage</span></label>
     <label class="toggle admin-only-toggle" title="Toggle pilot assignments on mission bars"><input type="checkbox" id="missionAssignToggle" checked onchange="toggleMissionAssign()"><span class="toggle-slider"></span><span class="toggle-lbl">Mission Assignments</span></label>
     <label class="toggle" title="Toggle available rotation bars"><input type="checkbox" id="availToggle" onchange="toggleAvailable()"><span class="toggle-slider"></span><span class="toggle-lbl">Available</span></label>
+    <label class="toggle" title="Toggle proposed (not yet agreed) rotation bars"><input type="checkbox" id="propToggle" checked onchange="toggleProposed()"><span class="toggle-slider"></span><span class="toggle-lbl">Proposed</span></label>
     <label class="toggle admin-only-toggle" title="Hide all mission rows"><input type="checkbox" id="hideMissionsToggle" onchange="toggleHideMissions()"><span class="toggle-slider"></span><span class="toggle-lbl">Hide Missions</span></label>
     <label class="toggle" title="Show dual-rated pilots (hidden by default)"><input type="checkbox" id="dualRatedToggle" onchange="toggleDualRated()"><span class="toggle-slider"></span><span class="toggle-lbl">Dual Rated</span></label>
     <label class="toggle" title="Reveal pilot rows you've individually hidden so you can restore them"><input type="checkbox" id="showHiddenToggle" onchange="toggleShowHidden()"><span class="toggle-slider"></span><span class="toggle-lbl">Show Hidden</span></label>
@@ -235,8 +238,10 @@ body.has-pilot-focus .p-row.pilot-focused .pname { font-weight:700; color:var(--
   <div class="leg"><input type="color" id="cc-vacation" style="width:14px;height:14px;border:none;padding:0;cursor:pointer;border-radius:2px" onchange="ROT_COLORS.vacation=this.value;saveRotColors();render()"> Vacation</div>
   <div class="leg"><input type="color" id="cc-training" style="width:14px;height:14px;border:none;padding:0;cursor:pointer;border-radius:2px" onchange="ROT_COLORS.training=this.value;saveRotColors();render()"> Training</div>
   <div class="leg"><input type="color" id="cc-available" style="width:14px;height:14px;border:none;padding:0;cursor:pointer;border-radius:2px" onchange="ROT_COLORS.available=this.value;saveRotColors();render()"> Available</div>
+  <div class="leg"><input type="color" id="cc-proposedOn" style="width:14px;height:14px;border:none;padding:0;cursor:pointer;border-radius:2px" onchange="ROT_COLORS.proposedOn=this.value;saveRotColors();render()"> Proposed On</div>
+  <div class="leg"><input type="color" id="cc-proposedOff" style="width:14px;height:14px;border:none;padding:0;cursor:pointer;border-radius:2px" onchange="ROT_COLORS.proposedOff=this.value;saveRotColors();render()"> Proposed Off</div>
   <div class="leg"><div class="lsw" style="background:var(--yellow)"></div> Cursor</div>
-  <span id="app-version" style="font-size:10px;opacity:.5;cursor:pointer;margin-left:4px;user-select:none">v3.85</span>
+  <span id="app-version" style="font-size:10px;opacity:.5;cursor:pointer;margin-left:4px;user-select:none">v3.86</span>
   <span id="legend-hint" style="margin-left:auto;font-size:10px">Add a note about 'Vacation' or 'Availability' with the + Add Rotation button.</span>
 </div>
 
@@ -422,6 +427,11 @@ function applyAdminMode(){ applyModes(); }
 function toggleAvailable(){
   const cb=document.getElementById('availToggle');
   document.body.classList.toggle('hide-available',!cb.checked);
+}
+
+function toggleProposed(){
+  const cb=document.getElementById('propToggle');
+  document.body.classList.toggle('hide-proposed',!cb.checked);
 }
 
 function toggleCoverage(){
@@ -1187,8 +1197,11 @@ function pg(p){if(p.temp) return 'temp';if(p.mg) return 'mg';const cats=p.quals.
 const PILOT_COLORS=JSON.parse(localStorage.getItem('pp_pilotColors')||'null')||{uam:'#87CEEB',both:'#1a3a6b',survey:'#FF8C00',mg:'#9CA3AF',temp:'#AB47BC'};
 function gc(g){return PILOT_COLORS[g]||'#888';}
 function savePilotColors(){localStorage.setItem('pp_pilotColors',JSON.stringify(PILOT_COLORS));}
-const ROT_COLORS=JSON.parse(localStorage.getItem('pp_rotColors')||'null')||{on:'#10B981',off:'#F87171',workover:'#42A5F5',vacation:'#F59E0B',available:'#F472B6',training:'#000000'};
-function rotColor(st){return st==='WORKOVER'?ROT_COLORS.workover:st==='VACATION_EXTRA'?ROT_COLORS.vacation:st==='AVAILABLE_WORKOVER'?ROT_COLORS.available:st==='TRAINING'?ROT_COLORS.training:ROT_COLORS.on;}
+// Defaults are SPREAD UNDER the stored object so that adding a new colour key ships a
+// working default to users who already have pp_rotColors in localStorage. Without the
+// spread, every existing browser renders the new bars as `undefined` -> transparent.
+const ROT_COLORS=Object.assign({on:'#10B981',off:'#F87171',workover:'#42A5F5',vacation:'#F59E0B',available:'#F472B6',training:'#000000',proposedOn:'#166534',proposedOff:'#991B1B'},JSON.parse(localStorage.getItem('pp_rotColors')||'null')||{});
+function rotColor(st){return st==='WORKOVER'?ROT_COLORS.workover:st==='VACATION_EXTRA'?ROT_COLORS.vacation:st==='AVAILABLE_WORKOVER'?ROT_COLORS.available:st==='TRAINING'?ROT_COLORS.training:st==='PROPOSED_ON'?ROT_COLORS.proposedOn:st==='PROPOSED_OFF'?ROT_COLORS.proposedOff:ROT_COLORS.on;}
 function saveRotColors(){localStorage.setItem('pp_rotColors',JSON.stringify(ROT_COLORS));}
 
 function sk(m,h){return m+'_'+h;}
@@ -1456,6 +1469,8 @@ function render(){
   if(ccu)ccu.value=PILOT_COLORS.uam;if(ccb)ccb.value=PILOT_COLORS.both;if(ccs)ccs.value=PILOT_COLORS.survey;
   const ccm=document.getElementById('cc-mg');if(ccm)ccm.value=PILOT_COLORS.mg||'#9CA3AF';
   const ccTemp=document.getElementById('cc-temp');if(ccTemp)ccTemp.value=PILOT_COLORS.temp||'#AB47BC';
+  const ccPOn=document.getElementById('cc-proposedOn');if(ccPOn)ccPOn.value=ROT_COLORS.proposedOn;
+  const ccPOff=document.getElementById('cc-proposedOff');if(ccPOff)ccPOff.value=ROT_COLORS.proposedOff;
   const ccOn=document.getElementById('cc-on');if(ccOn)ccOn.value=ROT_COLORS.on;
   const ccOff=document.getElementById('cc-off');if(ccOff)ccOff.value=ROT_COLORS.off;
   const ccWo=document.getElementById('cc-workover');if(ccWo)ccWo.value=ROT_COLORS.workover;
@@ -1703,7 +1718,7 @@ function pilotRow(p,td,ds){
     const rl=Math.max(0,rawL)*DW, rw=Math.max(0,(Math.min(td,rawR+1)-Math.max(0,rawL))*DW);
     if(rw<=0) continue;
 
-    if(r.st==='ON'||r.st==='WORKOVER'||r.st==='VACATION_EXTRA'||r.st==='AVAILABLE_WORKOVER'||r.st==='TRAINING'){
+    if(r.st==='ON'||r.st==='WORKOVER'||r.st==='VACATION_EXTRA'||r.st==='AVAILABLE_WORKOVER'||r.st==='TRAINING'||r.st==='PROPOSED_ON'||r.st==='PROPOSED_OFF'){
       const sLabel=fmtDM(r.s);
       const eLabel=fmtDM(r.e);
       // Calculate week count
@@ -1713,10 +1728,17 @@ function pilotRow(p,td,ds){
       const isStandard = days===42; // exactly 6 weeks
       const weekLabel = isStandard ? '6W' : (remDays===0 ? fullWeeks+'W' : fullWeeks+'W+'+remDays+'D');
       const centerCls = isStandard ? 'rot-center' : 'rot-center warn';
-      const blkCls = r.st==='WORKOVER' ? 'duty-blk workover' : r.st==='VACATION_EXTRA' ? 'duty-blk vacation-extra' : r.st==='AVAILABLE_WORKOVER' ? 'duty-blk available-workover' : r.st==='TRAINING' ? 'duty-blk training' : 'duty-blk on';
+      const isProposed = r.st==='PROPOSED_ON' || r.st==='PROPOSED_OFF';
+      const blkCls = r.st==='WORKOVER' ? 'duty-blk workover' : r.st==='VACATION_EXTRA' ? 'duty-blk vacation-extra' : r.st==='AVAILABLE_WORKOVER' ? 'duty-blk available-workover' : r.st==='TRAINING' ? 'duty-blk training' : r.st==='PROPOSED_ON' ? 'duty-blk proposed-on' : r.st==='PROPOSED_OFF' ? 'duty-blk proposed-off' : 'duty-blk on';
       const bgColor = rotColor(r.st);
-      const label = weekLabel;
-      const rotTip=r.note?`${p.name} — ${r.st.replace('_',' ')}\n${r.note}`.replace(/"/g,'&quot;'):'';
+      // Proposed blocks are a VIEWING overlay, not roster state — they are excluded from
+      // isOn(), the ON-days counter and coverage. The "P" prefix keeps that obvious on the
+      // bar itself so a proposal is never misread as an agreed rotation.
+      const label = isProposed ? 'P '+weekLabel : weekLabel;
+      const propTipBase = isProposed ? `${p.name} — ${r.st==='PROPOSED_ON'?'PROPOSED ON':'PROPOSED OFF'} (not agreed — viewing only)` : '';
+      const rotTip = isProposed
+        ? `${propTipBase}${r.note?'\n'+r.note:''}`.replace(/"/g,'&quot;')
+        : (r.note?`${p.name} — ${r.st.replace('_',' ')}\n${r.note}`.replace(/"/g,'&quot;'):'');
       bars+=`<div class="${blkCls}" data-pilot="${p.name}" data-ri="${ri}" ${rotTip?`title="${rotTip}"`:''} style="left:${rl}px;width:${rw}px;background:${bgColor}">
         ${weekTicksHTML(rl,rw,'rgba(255,255,255,.2)')}
         ${rw>=110?`<span class="rot-date rot-start">${sLabel}</span>`:''}
@@ -1833,6 +1855,8 @@ function showRotPop(e, pilot, ri){
       <option value="WORKOVER"${r.st==='WORKOVER'?' selected':''}>WORKOVER</option>
       <option value="AVAILABLE_WORKOVER"${r.st==='AVAILABLE_WORKOVER'?' selected':''}>AVAILABLE</option>
       <option value="VACATION_EXTRA"${r.st==='VACATION_EXTRA'?' selected':''}>VACATION</option>
+      <option value="PROPOSED_ON"${r.st==='PROPOSED_ON'?' selected':''}>PROPOSED ON</option>
+      <option value="PROPOSED_OFF"${r.st==='PROPOSED_OFF'?' selected':''}>PROPOSED OFF</option>
       <option value="TRAINING"${r.st==='TRAINING'?' selected':''}>TRAINING</option>
     </select>
     <label>Note</label>
@@ -1977,6 +2001,8 @@ function showAddRotPop(e, pilotName){
       <option value="WORKOVER" selected>WORKOVER</option>
       <option value="AVAILABLE_WORKOVER">AVAILABLE</option>
       <option value="VACATION_EXTRA">VACATION</option>
+      <option value="PROPOSED_ON">PROPOSED ON</option>
+      <option value="PROPOSED_OFF">PROPOSED OFF</option>
       <option value="TRAINING">TRAINING</option>
     </select>
     <label>Note</label>
