@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Pilot Availability Planner v3.88 — THC H125</title>
+<title>Pilot Availability Planner v3.89 — THC H125</title>
 <style>
 :root {
   --bg: #0f1123;
@@ -198,6 +198,56 @@ body.has-pilot-focus .p-row.pilot-focused .pname { font-weight:700; color:var(--
   .legend { padding:4px 12px; gap:6px; }
   #legend-hint { margin-left:0!important; }
 }
+
+/* ====== CHANGES PANEL ======
+   A scheduler-facing feed of material roster changes. Deliberately quiet: it
+   reports rotation boundary moves and vacation/workover/training blocks only —
+   not colours, hide toggles, display names or mission edits. Abdul Rahman
+   Baghawi asked for it so he can see what moved without re-reading the board. */
+#chgBtn { position:relative; }
+#chgBadge {
+  position:absolute; top:-5px; right:-5px; min-width:15px; height:15px; padding:0 4px;
+  background:var(--accent); color:#fff; border-radius:8px; font-size:9px; font-weight:700;
+  line-height:15px; text-align:center; display:none;
+}
+#chgBadge.on { display:block; }
+#chgPanel {
+  position:fixed; top:0; right:0; width:340px; max-width:88vw; height:100vh;
+  background:var(--surface); border-left:1px solid var(--border);
+  display:flex; flex-direction:column; z-index:900;
+  transform:translateX(100%); transition:transform .18s ease;
+  box-shadow:-4px 0 18px rgba(0,0,0,.28);
+}
+#chgPanel.open { transform:translateX(0); }
+#chgPanel .cp-head {
+  display:flex; align-items:center; gap:8px; padding:11px 13px;
+  border-bottom:1px solid var(--border); flex-shrink:0;
+}
+#chgPanel .cp-head h2 { font-size:13px; font-weight:700; flex:1; }
+#chgPanel .cp-head button {
+  background:none; border:none; color:var(--muted); cursor:pointer;
+  font-size:10px; font-weight:600; padding:2px 5px; border-radius:4px;
+}
+#chgPanel .cp-head button:hover { color:var(--text); background:var(--surface2); }
+#chgPanel .cp-body { flex:1; overflow-y:auto; padding:4px 0 18px; }
+#chgPanel .cp-day {
+  font-size:9.5px; font-weight:700; text-transform:uppercase; letter-spacing:.6px;
+  color:var(--muted); padding:11px 13px 4px;
+}
+#chgPanel .cp-item {
+  display:flex; gap:8px; padding:6px 13px 6px 10px;
+  border-left:3px solid transparent; font-size:11.5px; line-height:1.4;
+}
+#chgPanel .cp-item.unread { border-left-color:var(--accent); background:var(--surface2); }
+#chgPanel .cp-item .cp-ic { flex-shrink:0; font-size:12px; }
+#chgPanel .cp-item .cp-pilot { font-weight:700; }
+#chgPanel .cp-item .cp-period { color:var(--muted); }
+#chgPanel .cp-empty { padding:24px 16px; text-align:center; color:var(--muted); font-size:11px; line-height:1.6; }
+#chgPanel .cp-foot {
+  padding:7px 13px; border-top:1px solid var(--border); flex-shrink:0;
+  font-size:9.5px; color:var(--muted);
+}
+@media (max-width:700px) { #chgPanel { width:100vw; max-width:100vw; } }
 </style>
 </head>
 <body>
@@ -214,10 +264,21 @@ body.has-pilot-focus .p-row.pilot-focused .pname { font-weight:700; color:var(--
     <label class="toggle" title="Show dual-rated pilots (hidden by default)"><input type="checkbox" id="dualRatedToggle" onchange="toggleDualRated()"><span class="toggle-slider"></span><span class="toggle-lbl">Dual Rated</span></label>
     <label class="toggle" title="Reveal pilot rows you've individually hidden so you can restore them"><input type="checkbox" id="showHiddenToggle" onchange="toggleShowHidden()"><span class="toggle-slider"></span><span class="toggle-lbl">Show Hidden</span></label>
 
+    <button id="chgBtn" onclick="toggleChangePanel()" title="Recent roster changes">🔔 Changes<span id="chgBadge"></span></button>
     <button onclick="window.open('https://willslawrence.github.io/thc-fleet-map-v2/','_blank')" title="Open Fleet Map">🗺️ Fleet Map</button>
     <button id="commitBtn" onclick="commitChanges()" title="Save changes to Google Sheets" style="position:relative;">💾 Commit</button>
     <button onclick="resetFromAPI()" title="Reload from Google Sheets and discard uncommitted changes">🗑️ Reset</button>
   </div>
+</div>
+
+<div id="chgPanel" aria-label="Recent roster changes">
+  <div class="cp-head">
+    <h2>🔔 Recent changes</h2>
+    <button onclick="markChangesRead()" title="Clear the unread badge">Mark read</button>
+    <button onclick="toggleChangePanel(false)" title="Close" style="font-size:15px">×</button>
+  </div>
+  <div class="cp-body" id="chgBody"></div>
+  <div class="cp-foot" id="chgFoot"></div>
 </div>
 
 <div class="sim-banner" id="simBanner">🎮 SIMULATION MODE — changes are local only</div>
@@ -241,7 +302,7 @@ body.has-pilot-focus .p-row.pilot-focused .pname { font-weight:700; color:var(--
   <div class="leg"><input type="color" id="cc-proposedOn" style="width:14px;height:14px;border:none;padding:0;cursor:pointer;border-radius:2px" onchange="ROT_COLORS.proposedOn=this.value;saveRotColors();render()"> Proposed On</div>
   <div class="leg"><input type="color" id="cc-proposedOff" style="width:14px;height:14px;border:none;padding:0;cursor:pointer;border-radius:2px" onchange="ROT_COLORS.proposedOff=this.value;saveRotColors();render()"> Proposed Off</div>
   <div class="leg"><div class="lsw" style="background:var(--yellow)"></div> Cursor</div>
-  <span id="app-version" style="font-size:10px;opacity:.5;cursor:pointer;margin-left:4px;user-select:none">v3.88</span>
+  <span id="app-version" style="font-size:10px;opacity:.5;cursor:pointer;margin-left:4px;user-select:none">v3.89</span>
   <span id="legend-hint" style="margin-left:auto;font-size:10px">Add a note about 'Vacation' or 'Availability' with the + Add Rotation button.</span>
 </div>
 
@@ -477,6 +538,206 @@ function toggleSimulate(){
   showMessage(simulateMode?'🎮 Simulation mode ON — changes are local only':'🎮 Simulation mode OFF','info');
 }
 
+
+// ====== CHANGE LOG ======
+// Abdul Rahman (scheduling) needs to see what moved without re-reading the whole
+// board. The diff is taken HERE, at commit time, against the baseline this page
+// loaded — the only moment both states exist. Entries are appended to the Sheet's
+// ChangeLog tab (append-only; the four data tabs are clear-then-write and would
+// eat the history).
+//
+// Deliberately quiet. It reports rotation boundary moves and vacation / workover /
+// training blocks. It says nothing about colours, hide toggles, display names,
+// mission edits or note-only tweaks — Will changes those constantly and a feed
+// nobody reads is worse than no feed.
+const CHG_WINDOW_DAYS = 30;   // how far back the panel shows (Sheet retains 90)
+let CHANGELOG = [];           // entries loaded from the Sheet, oldest first
+
+const CHG_KIND = {
+  rotation: {icon:'🔄', noun:'rotation'},
+  workover: {icon:'💪', noun:'work over'},
+  vacation: {icon:'🌴', noun:'vacation'},
+  training: {icon:'📚', noun:'training'},
+  proposed: {icon:'📝', noun:'proposed rotation'},
+  pilot:    {icon:'👤', noun:'pilot'}
+};
+const CHG_TYPE_KIND = {
+  ON:'rotation', OFF:'rotation',
+  PROPOSED_ON:'proposed', PROPOSED_OFF:'proposed',
+  WORKOVER:'workover', VACATION_EXTRA:'vacation', TRAINING:'training'
+};
+const CHG_MONTHS = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+
+function chgMonthKey(d){ return String(d||'').slice(0,7); }           // "2026-09"
+function chgMonthLabel(k){
+  const [y,m] = k.split('-');
+  return CHG_MONTHS[parseInt(m,10)-1] + ' ' + y;
+}
+// Two months read fine as a list; more is a range. "Sep, Oct 2026" vs "Sep 2026 – Jan 2027".
+function chgPeriod(keys){
+  const ks = [...keys].filter(Boolean).sort();
+  if (!ks.length) return '';
+  if (ks.length <= 2) return ks.map(chgMonthLabel).join(', ');
+  return chgMonthLabel(ks[0]) + ' – ' + chgMonthLabel(ks[ks.length-1]);
+}
+
+// Blocks keyed on type + dates only. Note text is excluded on purpose: retyping a
+// note is not a roster change and must not raise an entry.
+function chgBlockMap(rot){
+  const m = new Map();
+  for (const r of (rot||[])) {
+    if (!r || !r.s || !r.e) continue;
+    const st = String(r.st || 'OFF').toUpperCase();
+    m.set(st+'|'+r.s+'|'+r.e, {st:st, s:r.s, e:r.e});
+  }
+  return m;
+}
+
+function chgSnapshot(){ return PILOTS.map(p => ({n:p.name, rot:p.rot})); }
+
+// Diff a baseline snapshot against the current one. Returns rolled-up entries:
+// one per pilot per kind, never one per block.
+function diffRotations(baseSnap, nextSnap){
+  const base = new Map((baseSnap||[]).map(p => [p.n, p.rot]));
+  const next = new Map((nextSnap||[]).map(p => [p.n, p.rot]));
+  const ts = new Date().toISOString();
+  const out = [];
+  const push = (pilot, kind, period, summary) =>
+    out.push({ts:ts, pilot:pilot, kind:kind, period:period, summary:summary});
+
+  for (const name of base.keys()) {
+    if (!next.has(name)) push(name, 'pilot', '', 'removed from the planner');
+  }
+
+  for (const [name, nextRot] of next) {
+    if (!base.has(name)) {
+      // A new pilot's blocks are all "added" — report the arrival, not 19 rows.
+      push(name, 'pilot', '', 'added to the planner');
+      continue;
+    }
+    const baseRot = base.get(name);
+    const b = chgBlockMap(baseRot), n = chgBlockMap(nextRot);
+    const added = [...n.keys()].filter(k => !b.has(k)).map(k => n.get(k));
+    const removed = [...b.keys()].filter(k => !n.has(k)).map(k => b.get(k));
+    if (!added.length && !removed.length) continue;
+
+    // --- rotation / proposed: report the BOUNDARIES that moved --------------
+    // A 42-day ON block spans three months, and shifting one boundary rewrites
+    // the block either side of it. Diffing whole blocks therefore flags months
+    // nobody touched — move Lisa's 17 Sep boundary and you'd get "Aug 2026 –
+    // Dec 2027". Diffing the boundary dates gives "Sep 2026", which is the news.
+    for (const kind of ['rotation', 'proposed']) {
+      const types = kind === 'rotation' ? ['ON','OFF'] : ['PROPOSED_ON','PROPOSED_OFF'];
+      const boundsOf = rot => {
+        const set = new Set();
+        for (const r of (rot||[])) {
+          if (r && r.s && types.indexOf(String(r.st||'OFF').toUpperCase()) >= 0) { set.add(r.s); set.add(r.e); }
+        }
+        return set;
+      };
+      const bb = boundsOf(baseRot), nb = boundsOf(nextRot);
+      const moved = [...bb].filter(d => !nb.has(d)).concat([...nb].filter(d => !bb.has(d)));
+      const changedBlocks = added.concat(removed).filter(x => types.indexOf(x.st) >= 0);
+      if (!changedBlocks.length) continue;
+      // Same dates, different type (an ON flipped to OFF) moves no boundary —
+      // fall back to the blocks themselves so the flip is still reported.
+      const months = new Set((moved.length ? moved : changedBlocks.map(x => x.s)).map(chgMonthKey));
+      push(name, kind, chgPeriod(months),
+           (kind === 'rotation' ? 'rotation' : 'proposed rotation') + ' changed');
+    }
+
+    // --- overlays: vacation / work over / training --------------------------
+    const buckets = {};
+    for (const [list, key] of [[added,'added'], [removed,'removed']]) {
+      for (const blk of list) {
+        const kind = CHG_TYPE_KIND[blk.st];
+        if (!kind || kind === 'rotation' || kind === 'proposed') continue;
+        const bk = buckets[kind] = buckets[kind] || {added:0, removed:0, months:new Set()};
+        bk[key]++;
+        // Overlays are short, so the span they cover reads better than a boundary.
+        let cur = chgMonthKey(blk.s); const stop = chgMonthKey(blk.e);
+        for (let guard = 0; cur <= stop && guard < 24; guard++) {
+          bk.months.add(cur);
+          let y = Number(cur.slice(0,4)), m = Number(cur.slice(5,7)) + 1;
+          if (m > 12) { m = 1; y++; }
+          cur = y + '-' + String(m).padStart(2,'0');
+        }
+      }
+    }
+    for (const kind of Object.keys(buckets)) {
+      const bk = buckets[kind];
+      const verb = (bk.added && bk.removed) ? 'moved' : (bk.added ? 'added' : 'removed');
+      push(name, kind, chgPeriod(bk.months), CHG_KIND[kind].noun + ' ' + verb);
+    }
+  }
+  return out;
+}
+
+// ---- panel ----
+function chgLastSeen(){ return localStorage.getItem('pp_lastSeenChanges') || ''; }
+function chgUnread(){
+  const seen = chgLastSeen();
+  return chgVisible().filter(e => String(e.ts) > seen).length;
+}
+function chgVisible(){
+  const cutoff = new Date(Date.now() - CHG_WINDOW_DAYS*86400000).toISOString();
+  return CHANGELOG.filter(e => String(e.ts) >= cutoff);
+}
+function updateChangeBadge(){
+  const el = document.getElementById('chgBadge');
+  if (!el) return;
+  const n = chgUnread();
+  el.textContent = n > 99 ? '99+' : n;
+  el.classList.toggle('on', n > 0);
+}
+function markChangesRead(){
+  localStorage.setItem('pp_lastSeenChanges', new Date().toISOString());
+  updateChangeBadge();
+  renderChangePanel();
+}
+function toggleChangePanel(force){
+  const el = document.getElementById('chgPanel');
+  if (!el) return;
+  const open = (force === undefined) ? !el.classList.contains('open') : !!force;
+  el.classList.toggle('open', open);
+  if (open) renderChangePanel();
+}
+function chgDayLabel(iso){
+  const d = new Date(iso), today = dayStart(new Date());
+  const day = dayStart(d);
+  const diff = Math.round((today - day) / 86400000);
+  if (diff === 0) return 'Today';
+  if (diff === 1) return 'Yesterday';
+  return d.toLocaleDateString('en-GB', {day:'2-digit', month:'short'});
+}
+function renderChangePanel(){
+  const body = document.getElementById('chgBody'), foot = document.getElementById('chgFoot');
+  if (!body) return;
+  const seen = chgLastSeen();
+  const items = chgVisible().slice().sort((a,b) => String(b.ts).localeCompare(String(a.ts)));
+  if (!items.length) {
+    body.innerHTML = '<div class="cp-empty">No roster changes in the last '
+      + CHG_WINDOW_DAYS + ' days.<br>Rotation moves, vacation and work over show up here.</div>';
+    foot.textContent = '';
+    return;
+  }
+  const esc = t => String(t == null ? '' : t).replace(/[&<>]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;'}[c]));
+  let html = '', lastDay = '';
+  for (const e of items) {
+    const day = chgDayLabel(e.ts);
+    if (day !== lastDay) { html += '<div class="cp-day">' + esc(day) + '</div>'; lastDay = day; }
+    const k = CHG_KIND[e.kind] || CHG_KIND.rotation;
+    html += '<div class="cp-item' + (String(e.ts) > seen ? ' unread' : '') + '">'
+         +  '<span class="cp-ic">' + k.icon + '</span><span>'
+         +  '<span class="cp-pilot">' + esc(e.pilot) + '</span> — ' + esc(e.summary)
+         +  (e.period ? ' <span class="cp-period">(' + esc(e.period) + ')</span>' : '')
+         +  '</span></div>';
+  }
+  body.innerHTML = html;
+  foot.textContent = items.length + ' change' + (items.length === 1 ? '' : 's')
+    + ' in the last ' + CHG_WINDOW_DAYS + ' days';
+}
+
 // ====== API FUNCTIONS ======
 async function fetchFromAPI() {
   try {
@@ -486,6 +747,7 @@ async function fetchFromAPI() {
 
     // Stale-page guard: remember the Sheet revision this page loaded from.
     SHEET_REV = (data.rev !== undefined && data.rev !== null) ? Number(data.rev) : null;
+    CHANGELOG = Array.isArray(data.changelog) ? data.changelog : [];
 
     // Parse the data from the API
     PILOTS = data.pilots.filter(pilot => pilot.Name).map(pilot => ({
@@ -602,6 +864,8 @@ async function fetchFromAPI() {
     ORIGINAL_MISSIONS = JSON.parse(JSON.stringify(MISSIONS));
     ORIGINAL_MISSIONS_LOADED = JSON.parse(JSON.stringify(MISSIONS)); // Immutable — never updated by local edits
     ORIGINAL_ROTATIONS = JSON.stringify(PILOTS.map(p=>({n:p.name,rot:p.rot})));
+    updateChangeBadge();
+    renderChangePanel();
     return apiAssignments;
     
   } catch (error) {
@@ -678,6 +942,15 @@ async function commitToAPI() {
       p.dualRated ? 'TRUE' : ''
     ]);
 
+    // Diff BEFORE the write, against the baseline this page loaded. Wrapped
+    // because a broken diff must never block a roster commit.
+    let chgEntries = [];
+    try {
+      chgEntries = diffRotations(JSON.parse(ORIGINAL_ROTATIONS || '[]'), chgSnapshot());
+    } catch (e) {
+      console.warn('Change log diff failed — committing without it:', e);
+    }
+
     // --- Atomic commit with stale-page guard ---
     // One POST writes all tabs; the Apps Script rejects it if the Sheet's revision
     // moved since this page loaded (someone else committed) — so a stale page can
@@ -694,7 +967,8 @@ async function commitToAPI() {
           assignments: rows,
           missions: missionRows,
           rotations: rotRows,
-          pilots: pilotRows
+          pilots: pilotRows,
+          changelog: chgEntries
         }),
         redirect: 'follow'
       });
@@ -764,6 +1038,14 @@ async function commitToAPI() {
     ORIGINAL_ASSIGNMENTS = JSON.parse(JSON.stringify(asgn));
     ORIGINAL_MISSIONS = JSON.parse(JSON.stringify(MISSIONS));
     ORIGINAL_ROTATIONS = JSON.stringify(PILOTS.map(p=>({n:p.name,rot:p.rot})));
+    if (committedAtomic && chgEntries.length) {
+      // Your own commit is not news to you — advance last-seen so the badge stays
+      // at zero for the person who just made the change.
+      CHANGELOG = CHANGELOG.concat(chgEntries);
+      localStorage.setItem('pp_lastSeenChanges', new Date().toISOString());
+      updateChangeBadge();
+      renderChangePanel();
+    }
     lastCommitTime = new Date();
     updateDirtyState();
 

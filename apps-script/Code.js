@@ -6,6 +6,64 @@ const SHEET_NAME = 'Pilot Planner Data';
 // page can never overwrite newer data.
 const META_TAB = 'PlannerMeta';
 
+// --- Change log: append-only feed of material roster changes ---
+// The planner diffs its loaded baseline against what it is about to commit and
+// sends the human-readable result here. This tab is APPENDED to, never cleared —
+// deliberately unlike the four data tabs, whose clear-then-write is what
+// destroyed Lisa le Roux's and Dermot Fahy's rosters (2026-08-23/24).
+const CHANGELOG_TAB = 'ChangeLog';
+const CHANGELOG_HEADERS = ['Timestamp', 'Pilot', 'Kind', 'Period', 'Summary'];
+const CHANGELOG_RETAIN_DAYS = 90;
+
+function getChangeLogSheet_() {
+ const ss = SpreadsheetApp.getActiveSpreadsheet();
+ let sh = ss.getSheetByName(CHANGELOG_TAB);
+ if (!sh) {
+ sh = ss.insertSheet(CHANGELOG_TAB);
+ sh.getRange(1, 1, 1, CHANGELOG_HEADERS.length).setValues([CHANGELOG_HEADERS]);
+ sh.setFrozenRows(1);
+ // Plain text on every column. Sheets otherwise parses a Period like "Nov 2026"
+ // into a real date and readAll hands the panel "2026-11-01T00:00:00.000Z".
+ sh.getRange(1, 1, sh.getMaxRows(), CHANGELOG_HEADERS.length).setNumberFormat('@');
+ }
+ return sh;
+}
+
+// Appends entries and drops anything past the retention window, so the tab can
+// never grow without bound. Returns the number of rows appended.
+function appendChangeLog_(entries) {
+ if (!entries || !entries.length) return 0;
+ const sh = getChangeLogSheet_();
+ const rows = entries.map(function(e) {
+ return [e.ts || new Date().toISOString(), e.pilot || '', e.kind || '', e.period || '', e.summary || ''];
+ });
+ const target = sh.getRange(sh.getLastRow() + 1, 1, rows.length, CHANGELOG_HEADERS.length);
+ target.setNumberFormat('@'); // belt and braces for tabs created before the format was set
+ target.setValues(rows);
+ pruneChangeLog_(sh);
+ return rows.length;
+}
+
+function pruneChangeLog_(sh) {
+ const last = sh.getLastRow();
+ if (last < 2) return;
+ const cutoff = new Date(Date.now() - CHANGELOG_RETAIN_DAYS * 86400000).toISOString();
+ const stamps = sh.getRange(2, 1, last - 1, 1).getValues();
+ // Rows are appended in time order, so everything stale is a leading run.
+ let stale = 0;
+ while (stale < stamps.length && String(stamps[stale][0]) < cutoff) stale++;
+ if (stale > 0) sh.deleteRows(2, stale);
+}
+
+function readChangeLog_() {
+ const sh = getChangeLogSheet_();
+ const last = sh.getLastRow();
+ if (last < 2) return [];
+ return sh.getRange(2, 1, last - 1, CHANGELOG_HEADERS.length).getValues().map(function(r) {
+ return {ts: String(r[0]), pilot: r[1], kind: r[2], period: r[3], summary: r[4]};
+ }).filter(function(e) { return e.ts && e.summary; }); // tolerate blank rows left in the tab
+}
+
 function getRev_() {
  const ss = SpreadsheetApp.getActiveSpreadsheet();
  let sh = ss.getSheetByName(META_TAB);
@@ -45,6 +103,7 @@ function doGet(e) {
  result[name.toLowerCase()] = sheet ? sheetToJson(sheet) : [];
  });
  result.rev = getRev_(); // stale-page guard: page remembers this, sends it back on commitAll
+ result.changelog = readChangeLog_(); // recent material changes, for the Changes panel
  return jsonResponse(result);
  }
  return jsonResponse({error: 'Unknown action: ' + action});
@@ -186,8 +245,17 @@ function handleCommitAll(ss, body) {
  sheet.getRange(2, 1, rows.length, rows[0].length).setValues(rows);
  total += rows.length;
  }
+ // Append AFTER the data writes, still inside the lock: a change log entry must
+ // never describe a commit that did not land.
+ let logged = 0;
+ try {
+ logged = appendChangeLog_(body.changelog);
+ } catch (err) {
+ // A change log failure must never fail the commit — the roster is the payload.
+ logged = 0;
+ }
  const rev = bumpRev_();
- return {success: true, rowsWritten: total, rev: rev};
+ return {success: true, rowsWritten: total, rev: rev, logged: logged};
  } finally {
  lock.releaseLock();
  }

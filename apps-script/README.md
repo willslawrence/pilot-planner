@@ -12,7 +12,8 @@ The Google Apps Script web app that serves the planner's data. It is **container
 - `POST ?action=write&sheet=<tab>` — **positional** full-replace of rows 2+ (row 1 headers preserved). Frontend row order must match the sheet header order.
 - `POST ?action=upsert` — header-mapped upsert by `MissionID` (used by `sync_obsidian_missions.py`).
 - `POST ?action=append&sheet=<tab>`.
-- `POST ?action=commitAll` — atomic multi-tab replace (`{rev, assignments, missions, rotations, pilots}`) with a **stale-page guard**: the Sheet keeps a revision counter (`PlannerMeta!A1`, hidden), every write bumps it, `readAll` returns it as `rev`, and `commitAll` rejects with `{stale:true}` if the sender's rev doesn't match — so a commit from an unrefreshed page can't overwrite newer commits. Skips empty row arrays (never clears a tab). LockService-serialized.
+- **`ChangeLog` tab** — append-only feed of material roster changes, written by `commitAll` and returned by `readAll` as `changelog`. Columns `Timestamp | Pilot | Kind | Period | Summary`, forced to plain text (Sheets otherwise parses a Period like `Nov 2026` into a date). Retained 90 days, pruned on write. The planner takes the diff client-side at commit time; the backend only appends what it is handed, and a change-log failure never fails the commit.
+- `POST ?action=commitAll` — atomic multi-tab replace (`{rev, assignments, missions, rotations, pilots, changelog}`) with a **stale-page guard**: the Sheet keeps a revision counter (`PlannerMeta!A1`, hidden), every write bumps it, `readAll` returns it as `rev`, and `commitAll` rejects with `{stale:true}` if the sender's rev doesn't match — so a commit from an unrefreshed page can't overwrite newer commits. Skips empty row arrays (never clears a tab). LockService-serialized.
 
 ## Workflow
 ```bash
