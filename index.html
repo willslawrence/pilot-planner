@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Pilot Availability Planner v3.90 — THC H125</title>
+<title>Pilot Availability Planner v3.91 — THC H125</title>
 <style>
 :root {
   --bg: #0f1123;
@@ -247,6 +247,11 @@ body.has-pilot-focus .p-row.pilot-focused .pname { font-weight:700; color:var(--
   padding:7px 13px; border-top:1px solid var(--border); flex-shrink:0;
   font-size:9.5px; color:var(--muted);
 }
+#chgPanel .cp-more {
+  background:none; border:none; color:var(--muted); cursor:pointer; padding:0;
+  font-size:9.5px; font-weight:600; text-decoration:underline;
+}
+#chgPanel .cp-more:hover { color:var(--text); }
 @media (max-width:700px) { #chgPanel { width:100vw; max-width:100vw; } }
 </style>
 </head>
@@ -302,7 +307,7 @@ body.has-pilot-focus .p-row.pilot-focused .pname { font-weight:700; color:var(--
   <div class="leg"><input type="color" id="cc-proposedOn" style="width:14px;height:14px;border:none;padding:0;cursor:pointer;border-radius:2px" onchange="ROT_COLORS.proposedOn=this.value;saveRotColors();render()"> Proposed On</div>
   <div class="leg"><input type="color" id="cc-proposedOff" style="width:14px;height:14px;border:none;padding:0;cursor:pointer;border-radius:2px" onchange="ROT_COLORS.proposedOff=this.value;saveRotColors();render()"> Proposed Off</div>
   <div class="leg"><div class="lsw" style="background:var(--yellow)"></div> Cursor</div>
-  <span id="app-version" style="font-size:10px;opacity:.5;cursor:pointer;margin-left:4px;user-select:none">v3.90</span>
+  <span id="app-version" style="font-size:10px;opacity:.5;cursor:pointer;margin-left:4px;user-select:none">v3.91</span>
   <span id="legend-hint" style="margin-left:auto;font-size:10px">Add a note about 'Vacation' or 'Availability' with the + Add Rotation button.</span>
 </div>
 
@@ -721,32 +726,59 @@ function chgDayLabel(iso){
   if (diff === 1) return 'Yesterday';
   return d.toLocaleDateString('en-GB', {day:'2-digit', month:'short'});
 }
+let CHG_SHOW_ALL = false;   // "Show earlier" state, per session
+
+function toggleChangeHistory(){ CHG_SHOW_ALL = !CHG_SHOW_ALL; renderChangePanel(); }
+
+function chgItemHTML(e, unread){
+  const esc = t => String(t == null ? '' : t).replace(/[&<>]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;'}[c]));
+  const k = CHG_KIND[e.kind] || CHG_KIND.rotation;
+  return '<div class="cp-item' + (unread ? ' unread' : '') + '">'
+       + '<span class="cp-ic">' + k.icon + '</span><span>'
+       + '<span class="cp-pilot">' + esc(e.pilot) + '</span> — ' + esc(e.summary)
+       + (e.period ? ' <span class="cp-period">(' + esc(e.period) + ')</span>' : '')
+       + '</span></div>';
+}
+
+// Read entries are HIDDEN by default, not just un-highlighted. The first cut left
+// them listed for the full 30 days, so the same two lines greeted Will on every
+// load and the panel read as broken — "it's not going away". Marking read now
+// visibly empties the list, which is the feedback the button was missing. The
+// history is still one click away, and nothing is ever deleted. (Will, 2026-08-24.)
 function renderChangePanel(){
   const body = document.getElementById('chgBody'), foot = document.getElementById('chgFoot');
   if (!body) return;
   const seen = chgLastSeen();
-  const items = chgVisible().slice().sort((a,b) => String(b.ts).localeCompare(String(a.ts)));
-  if (!items.length) {
+  const all = chgVisible().slice().sort((a,b) => String(b.ts).localeCompare(String(a.ts)));
+  const unread = all.filter(e => String(e.ts) > seen);
+  const shown = CHG_SHOW_ALL ? all : unread;
+  const earlier = all.length - unread.length;
+
+  if (!all.length) {
     body.innerHTML = '<div class="cp-empty">No roster changes in the last '
-      + CHG_WINDOW_DAYS + ' days.<br>Rotation moves, vacation and work over show up here.</div>';
-    foot.textContent = '';
+      + CHG_WINDOW_DAYS + ' days.<br>Rotation moves, vacation, work over and availability show up here.</div>';
+    foot.innerHTML = '';
     return;
   }
-  const esc = t => String(t == null ? '' : t).replace(/[&<>]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;'}[c]));
-  let html = '', lastDay = '';
-  for (const e of items) {
-    const day = chgDayLabel(e.ts);
-    if (day !== lastDay) { html += '<div class="cp-day">' + esc(day) + '</div>'; lastDay = day; }
-    const k = CHG_KIND[e.kind] || CHG_KIND.rotation;
-    html += '<div class="cp-item' + (String(e.ts) > seen ? ' unread' : '') + '">'
-         +  '<span class="cp-ic">' + k.icon + '</span><span>'
-         +  '<span class="cp-pilot">' + esc(e.pilot) + '</span> — ' + esc(e.summary)
-         +  (e.period ? ' <span class="cp-period">(' + esc(e.period) + ')</span>' : '')
-         +  '</span></div>';
+  if (!shown.length) {
+    body.innerHTML = '<div class="cp-empty">✅ You\'re all caught up.<br>'
+      + earlier + ' earlier change' + (earlier === 1 ? '' : 's') + ' in the last '
+      + CHG_WINDOW_DAYS + ' days.</div>';
+  } else {
+    let html = '', lastDay = '';
+    for (const e of shown) {
+      const day = chgDayLabel(e.ts);
+      if (day !== lastDay) { html += '<div class="cp-day">' + day + '</div>'; lastDay = day; }
+      html += chgItemHTML(e, String(e.ts) > seen);
+    }
+    body.innerHTML = html;
   }
-  body.innerHTML = html;
-  foot.textContent = items.length + ' change' + (items.length === 1 ? '' : 's')
-    + ' in the last ' + CHG_WINDOW_DAYS + ' days';
+
+  foot.innerHTML = earlier
+    ? '<button class="cp-more" onclick="toggleChangeHistory()">'
+      + (CHG_SHOW_ALL ? 'Hide earlier changes' : 'Show ' + earlier + ' earlier change' + (earlier === 1 ? '' : 's'))
+      + '</button>'
+    : unread.length + ' new change' + (unread.length === 1 ? '' : 's');
 }
 
 // ====== API FUNCTIONS ======
