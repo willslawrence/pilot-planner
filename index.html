@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Pilot Availability Planner v3.89 — THC H125</title>
+<title>Pilot Availability Planner v3.90 — THC H125</title>
 <style>
 :root {
   --bg: #0f1123;
@@ -302,7 +302,7 @@ body.has-pilot-focus .p-row.pilot-focused .pname { font-weight:700; color:var(--
   <div class="leg"><input type="color" id="cc-proposedOn" style="width:14px;height:14px;border:none;padding:0;cursor:pointer;border-radius:2px" onchange="ROT_COLORS.proposedOn=this.value;saveRotColors();render()"> Proposed On</div>
   <div class="leg"><input type="color" id="cc-proposedOff" style="width:14px;height:14px;border:none;padding:0;cursor:pointer;border-radius:2px" onchange="ROT_COLORS.proposedOff=this.value;saveRotColors();render()"> Proposed Off</div>
   <div class="leg"><div class="lsw" style="background:var(--yellow)"></div> Cursor</div>
-  <span id="app-version" style="font-size:10px;opacity:.5;cursor:pointer;margin-left:4px;user-select:none">v3.89</span>
+  <span id="app-version" style="font-size:10px;opacity:.5;cursor:pointer;margin-left:4px;user-select:none">v3.90</span>
   <span id="legend-hint" style="margin-left:auto;font-size:10px">Add a note about 'Vacation' or 'Availability' with the + Add Rotation button.</span>
 </div>
 
@@ -558,14 +558,23 @@ const CHG_KIND = {
   workover: {icon:'💪', noun:'work over'},
   vacation: {icon:'🌴', noun:'vacation'},
   training: {icon:'📚', noun:'training'},
+  available:{icon:'🙋', noun:'availability'},
   proposed: {icon:'📝', noun:'proposed rotation'},
-  pilot:    {icon:'👤', noun:'pilot'}
+  pilot:    {icon:'👤', noun:'pilot'},
+  other:    {icon:'📌', noun:'block'}
 };
 const CHG_TYPE_KIND = {
   ON:'rotation', OFF:'rotation',
   PROPOSED_ON:'proposed', PROPOSED_OFF:'proposed',
-  WORKOVER:'workover', VACATION_EXTRA:'vacation', TRAINING:'training'
+  WORKOVER:'workover', VACATION_EXTRA:'vacation', TRAINING:'training',
+  AVAILABLE_WORKOVER:'available'
 };
+// Any rotation type NOT listed above still gets reported, under its own prettified
+// name. The first version skipped unknown types outright and went silent when four
+// of Nathan Piper's AVAILABLE_WORKOVER blocks were deleted — the pilot-submitted
+// Available/Work Over requests are exactly what scheduling watches. A change log
+// must fail open: report something unrecognised, never nothing.
+function chgPrettyType(t){ return String(t||'block').toLowerCase().replace(/_/g,' '); }
 const CHG_MONTHS = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
 
 function chgMonthKey(d){ return String(d||'').slice(0,7); }           // "2026-09"
@@ -650,9 +659,11 @@ function diffRotations(baseSnap, nextSnap){
     const buckets = {};
     for (const [list, key] of [[added,'added'], [removed,'removed']]) {
       for (const blk of list) {
-        const kind = CHG_TYPE_KIND[blk.st];
-        if (!kind || kind === 'rotation' || kind === 'proposed') continue;
-        const bk = buckets[kind] = buckets[kind] || {added:0, removed:0, months:new Set()};
+        const kind = CHG_TYPE_KIND[blk.st] || 'other';
+        if (kind === 'rotation' || kind === 'proposed') continue; // handled above
+        const bk = buckets[kind] = buckets[kind] ||
+          {added:0, removed:0, months:new Set(),
+           noun: CHG_TYPE_KIND[blk.st] ? CHG_KIND[kind].noun : chgPrettyType(blk.st)};
         bk[key]++;
         // Overlays are short, so the span they cover reads better than a boundary.
         let cur = chgMonthKey(blk.s); const stop = chgMonthKey(blk.e);
@@ -667,7 +678,7 @@ function diffRotations(baseSnap, nextSnap){
     for (const kind of Object.keys(buckets)) {
       const bk = buckets[kind];
       const verb = (bk.added && bk.removed) ? 'moved' : (bk.added ? 'added' : 'removed');
-      push(name, kind, chgPeriod(bk.months), CHG_KIND[kind].noun + ' ' + verb);
+      push(name, kind, chgPeriod(bk.months), bk.noun + ' ' + verb);
     }
   }
   return out;
