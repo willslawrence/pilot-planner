@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Pilot Availability Planner v3.92 — THC H125</title>
+<title>Pilot Availability Planner v3.93 — THC H125</title>
 <style>
 :root {
   --bg: #0f1123;
@@ -74,11 +74,18 @@ html.light .m-row { background:#fff; }
 .mbar { position:absolute; top:6px; bottom:6px; border-radius:4px; display:flex; align-items:center; padding:0 8px; font-size:10px; font-weight:600; color:#fff; overflow:hidden; white-space:nowrap; border:1px solid var(--mbar-border); cursor:grab; justify-content:center; }
 .mbar:active { cursor:grabbing; }
 .mbar-date { position:absolute; bottom:1px; font-size:9px; font-weight:600; opacity:.8; white-space:nowrap; z-index:2; }
-/* Off-day punch-out: a mission that runs only on some weekdays shows blank
-   background on the days it does not operate. Painted INSIDE the bar it
-   belongs to (same trick as weekTicksHTML) so it can never cover an
-   assignment bar in a neighbouring lane. */
-.offday { position:absolute; top:0; bottom:0; background:var(--bg); pointer-events:none; }
+/* Operating days: a mission that runs only on some weekdays is drawn as one
+   SEGMENT per stretch of operating days, not as a solid bar with a mask over
+   it. Painting over a bar left its own 1px border showing as a hairline
+   through every gap, and could not let the row's month shading through. A gap
+   here is genuinely empty. */
+.mseg, .hseg, .aseg { position:absolute; top:0; bottom:0; pointer-events:none; }
+.seg-host { background:transparent!important; border-color:transparent!important; }
+.abar.seg-host { background-image:none!important; }
+.abar.offduty .aseg { background-image:repeating-linear-gradient(45deg,transparent,transparent 3px,rgba(0,0,0,.25) 3px,rgba(0,0,0,.25) 6px); }
+/* The pilot name rides above the segments on its own chip so it stays legible
+   where it crosses a gap. */
+.abar-chip { position:relative; z-index:1; padding:0 4px; border-radius:3px; }
 .mbar-start { left:6px; }
 .mbar-end { right:6px; }
 .mbar-name { font-size:10px; font-weight:700; z-index:2; }
@@ -312,7 +319,7 @@ body.has-pilot-focus .p-row.pilot-focused .pname { font-weight:700; color:var(--
   <div class="leg"><input type="color" id="cc-proposedOn" style="width:14px;height:14px;border:none;padding:0;cursor:pointer;border-radius:2px" onchange="ROT_COLORS.proposedOn=this.value;saveRotColors();render()"> Proposed On</div>
   <div class="leg"><input type="color" id="cc-proposedOff" style="width:14px;height:14px;border:none;padding:0;cursor:pointer;border-radius:2px" onchange="ROT_COLORS.proposedOff=this.value;saveRotColors();render()"> Proposed Off</div>
   <div class="leg"><div class="lsw" style="background:var(--yellow)"></div> Cursor</div>
-  <span id="app-version" style="font-size:10px;opacity:.5;cursor:pointer;margin-left:4px;user-select:none">v3.92</span>
+  <span id="app-version" style="font-size:10px;opacity:.5;cursor:pointer;margin-left:4px;user-select:none">v3.93</span>
   <span id="legend-hint" style="margin-left:auto;font-size:10px">Add a note about 'Vacation' or 'Availability' with the + Add Rotation button.</span>
 </div>
 
@@ -1709,20 +1716,43 @@ function opDaysLabel(set){
   if(!set) return '';
   return DOW_LABEL.filter((_,i)=>set.has(i)).join(', ');
 }
-// Blank-out blocks for the days this mission does not operate, positioned
-// relative to the bar they are appended into.
-function offDaysHTML(barLeft,barWidth,opSet){
-  if(!opSet) return '';
-  let html='';
-  const i0=Math.max(0,Math.floor(barLeft/DW));
-  const i1=Math.ceil((barLeft+barWidth)/DW);
+// The operating-day stretches inside a bar, as [relativeLeft, width] pairs.
+// opSet null => a single run covering the whole bar, i.e. exactly what every
+// bar did before operating days existed.
+function opRuns(barLeft,barWidth,opSet){
+  if(!opSet) return [[0,barWidth]];
+  const runs=[];
+  let cur=null;
+  const i0=Math.floor(barLeft/DW), i1=Math.ceil((barLeft+barWidth)/DW);
   for(let i=i0;i<i1;i++){
-    const dt=new Date(T0);dt.setDate(dt.getDate()+i);
-    if(opSet.has(dt.getDay())) continue;
     const rel=i*DW-barLeft;
     const l=Math.max(0,rel), r=Math.min(barWidth,rel+DW);
-    if(r-l<=0) continue;
-    html+=`<div class="offday" style="left:${l}px;width:${r-l}px"></div>`;
+    if(r-l<=0.01) continue;
+    const dt=new Date(T0);dt.setDate(dt.getDate()+i);
+    if(!opSet.has(dt.getDay())){ cur=null; continue; }
+    if(cur && Math.abs(cur[1]-l)<0.01) cur[1]=r;
+    else { cur=[l,r]; runs.push(cur); }
+  }
+  return runs.map(r=>[r[0],r[1]-r[0]]);
+}
+// Segment fills for a bar that only runs on some weekdays. Returns '' when the
+// mission runs every day, so the caller keeps its original solid bar untouched.
+// Trim a proposed coverage span to the days the mission actually flies, so
+// dropping a pilot on a weekends-only mission creates Fri–Sat, not the whole
+// Fri–Thu week. Returns [null,null] if nothing in the span is an operating day.
+function trimToOpDays(startDate,endDate,opSet){
+  if(!opSet) return [startDate,endDate];
+  let s=startDate,e=endDate;
+  while(s<=e && !opSet.has(D(s).getDay())) s=addDaysL(s,1);
+  while(e>=s && !opSet.has(D(e).getDay())) e=addDaysL(e,-1);
+  return s<=e?[s,e]:[null,null];
+}
+function segsHTML(cls,barLeft,barWidth,opSet,color,radius){
+  if(!opSet) return '';
+  let html='';
+  for(const r of opRuns(barLeft,barWidth,opSet)){
+    html+=`<div class="${cls}" style="left:${r[0]}px;width:${r[1]}px;background:${color}`
+        + (radius?`;border-radius:${radius}`:'')+`">${weekTicksHTML(barLeft+r[0],r[1],'rgba(255,255,255,.2)')}</div>`;
   }
   return html;
 }
@@ -1920,8 +1950,8 @@ function missionRows(m,td){
   if(ml>0) barsHtml+=`<div style="position:absolute;right:${td*DW-ml+4}px;top:0;height:${titleH}px;display:flex;align-items:center;font-size:9px;font-weight:600;color:${m.color};white-space:nowrap;pointer-events:none;z-index:3">${m.name}</div>`;
   let statusTip = m.status ? `${m.name}\nStatus: ${m.status}` : m.name;
   if(opSet) statusTip += `\nOperating days: ${opDaysLabel(opSet)}`;
-  barsHtml+=`<div class="mbar" data-mid="${m.id}" title="${statusTip.replace(/"/g,'&quot;')}" style="left:${ml}px;width:${mw}px;height:${titleH}px;top:0;bottom:auto;background:${m.color};border:1px solid ${m.color};border-radius:4px 4px 0 0;cursor:grab;z-index:2">
-    ${weekTicksHTML(ml,mw,'rgba(255,255,255,.2)')}${offDaysHTML(ml,mw,opSet)}
+  barsHtml+=`<div class="mbar${opSet?' seg-host':''}" data-mid="${m.id}" title="${statusTip.replace(/"/g,'&quot;')}" style="left:${ml}px;width:${mw}px;height:${titleH}px;top:0;bottom:auto;background:${m.color};border:1px solid ${m.color};border-radius:4px 4px 0 0;cursor:grab;z-index:2">
+    ${opSet?segsHTML('mseg',ml,mw,opSet,m.color,'3px 3px 0 0'):weekTicksHTML(ml,mw,'rgba(255,255,255,.2)')}
     ${mw>=100?`<span class="mbar-date mbar-start" style="color:rgba(255,255,255,.9)">${fmtDM(m.start)}</span>`:''}
     ${mw>=100?`<span class="mbar-date mbar-end" style="color:rgba(255,255,255,.9)">${fmtDM(m.end)}</span>`:''}
   </div>`;
@@ -1936,7 +1966,7 @@ function missionRows(m,td){
     const laneTop = titleH + hi * laneH;
     const isLast = hi === m.hc - 1;
     const borderRadius = isLast ? '0 0 4px 4px' : '0';
-    barsHtml+=`<div class="heli-lane-bg" data-mid="${m.id}" data-hi="${hi}" style="position:absolute;left:${hl}px;width:${hw}px;top:${laneTop}px;height:${laneH}px;background:${m.color};border-left:1px solid ${m.color};border-right:1px solid ${m.color};${isLast?'border-bottom:1px solid '+m.color+';':''}border-radius:${borderRadius};pointer-events:none;z-index:0">${weekTicksHTML(hl,hw,'rgba(255,255,255,.15)')}${offDaysHTML(hl,hw,opSet)}</div>`;
+    barsHtml+=`<div class="heli-lane-bg${opSet?' seg-host':''}" data-mid="${m.id}" data-hi="${hi}" style="position:absolute;left:${hl}px;width:${hw}px;top:${laneTop}px;height:${laneH}px;background:${m.color};border-left:1px solid ${m.color};border-right:1px solid ${m.color};${isLast?'border-bottom:1px solid '+m.color+';':''}border-radius:${borderRadius};pointer-events:none;z-index:0">${opSet?segsHTML('hseg',hl,hw,opSet,m.color,isLast?'0 0 3px 3px':'0'):weekTicksHTML(hl,hw,'rgba(255,255,255,.15)')}</div>`;
   }
 
   // Helicopter lanes
@@ -1945,7 +1975,7 @@ function missionRows(m,td){
     const overlaps = findOverlaps(m.id, hi);
     const arr = gA(m.id, hi);
     // Lane separator
-    if(hi>0) barsHtml+=`<div style="position:absolute;top:${laneTop}px;left:${ml}px;width:${mw}px;height:1px;background:${m.color};opacity:.2;pointer-events:none;z-index:1"></div>`;
+    if(hi>0) for(const _r of opRuns(ml,mw,opSet)) barsHtml+=`<div style="position:absolute;top:${laneTop}px;left:${ml+_r[0]}px;width:${_r[1]}px;height:1px;background:${m.color};opacity:.2;pointer-events:none;z-index:1"></div>`;
     // Drop zone for this lane
     barsHtml+=`<div class="h-drop" data-mid="${m.id}" data-hi="${hi}" style="position:absolute;top:${laneTop}px;left:0;right:0;height:${laneH}px;z-index:0"></div>`;
     // Assignment bars — assign sub-lanes for overlapping bars
@@ -1986,10 +2016,12 @@ function missionRows(m,td){
         barTop = laneTop+3;
         barH = laneH-6;
       }
-      barsHtml+=`<div class="${cls}" draggable="true" data-apilot="${a.pilot}" data-astart="${a.start}" data-aend="${a.end}" data-amid="${m.id}" data-ahi="${hi}" style="left:${al}px;width:${aw}px;top:${barTop}px;height:${barH}px;background:${p?gc(pg(p)):'#666'}" title="${a.pilot}: ${a.start}→${a.end}${off?' (OFF!)':''}${a.note?'\n'+a.note.replace(/"/g,'&quot;'):''}">
-        ${weekTicksHTML(al,aw,'rgba(255,255,255,.2)')}
+      const aCol=p?gc(pg(p)):'#666';
+      if(opSet) cls+=' seg-host';
+      barsHtml+=`<div class="${cls}" draggable="true" data-apilot="${a.pilot}" data-astart="${a.start}" data-aend="${a.end}" data-amid="${m.id}" data-ahi="${hi}" style="left:${al}px;width:${aw}px;top:${barTop}px;height:${barH}px;background:${aCol}" title="${a.pilot}: ${a.start}→${a.end}${off?' (OFF!)':''}${a.note?'\n'+a.note.replace(/"/g,'&quot;'):''}">
+        ${opSet?segsHTML('aseg',al,aw,opSet,aCol,'3px'):weekTicksHTML(al,aw,'rgba(255,255,255,.2)')}
         <span class="abar-grip abar-grip-l" data-edge="start" data-apilot="${a.pilot}" data-astart="${a.start}" data-aend="${a.end}" data-amid="${m.id}" data-ahi="${hi}"></span>
-        ${aw>110?`<span class="abar-date abar-date-l">${fmtDM(a.start)}</span>`:''}${fn}${aw>110?`<span class="abar-date abar-date-r">${fmtDM(a.end)}</span>`:''}
+        ${aw>110?`<span class="abar-date abar-date-l">${fmtDM(a.start)}</span>`:''}${opSet?`<span class="abar-chip" style="background:${aCol}">${fn}</span>`:fn}${aw>110?`<span class="abar-date abar-date-r">${fmtDM(a.end)}</span>`:''}
         <span class="abar-grip abar-grip-r" data-edge="end" data-apilot="${a.pilot}" data-astart="${a.start}" data-aend="${a.end}" data-amid="${m.id}" data-ahi="${hi}"></span>
         <span class="ax" onclick="event.stopPropagation();remAs('${m.id}',${hi},'${safeP}','${a.start}');render()">×</span>
       </div>`;
@@ -2041,19 +2073,19 @@ function adHocRows(missions,td){
       const opSet=parseOpDays(m.operatingDays);
       const mTotalH=titleH+heliH*m.hc;
       // Title bar — ad hoc: no inline name (too cramped in shared lanes), hover tooltip instead
-      barsHtml+=`<div class="mbar" data-mid="${m.id}" title="${m.name}${m.hc>1?' ('+m.hc+'x)':''}${opSet?'\nOperating days: '+opDaysLabel(opSet):''}" style="left:${ml}px;width:${mw}px;height:${titleH}px;top:0;bottom:auto;background:${m.color};border:1px solid ${m.color};border-radius:4px 4px 0 0;cursor:pointer;z-index:2" onclick="showPop(event,'${m.id}')">
-        ${weekTicksHTML(ml,mw,'rgba(255,255,255,.2)')}${offDaysHTML(ml,mw,opSet)}
+      barsHtml+=`<div class="mbar${opSet?' seg-host':''}" data-mid="${m.id}" title="${m.name}${m.hc>1?' ('+m.hc+'x)':''}${opSet?'\nOperating days: '+opDaysLabel(opSet):''}" style="left:${ml}px;width:${mw}px;height:${titleH}px;top:0;bottom:auto;background:${m.color};border:1px solid ${m.color};border-radius:4px 4px 0 0;cursor:pointer;z-index:2" onclick="showPop(event,'${m.id}')">
+        ${opSet?segsHTML('mseg',ml,mw,opSet,m.color,'3px 3px 0 0'):weekTicksHTML(ml,mw,'rgba(255,255,255,.2)')}
         ${mw>=100?`<span class="mbar-date mbar-start" style="color:rgba(255,255,255,.9)">${fmtDM(m.start)}</span>`:''}
         ${mw>=100?`<span class="mbar-date mbar-end" style="color:rgba(255,255,255,.9)">${fmtDM(m.end)}</span>`:''}
       </div>`;
       // Heli lane backgrounds
-      barsHtml+=`<div style="position:absolute;left:${ml}px;width:${mw}px;top:${titleH}px;height:${heliH*m.hc}px;background:${m.color};border-left:1px solid ${m.color};border-right:1px solid ${m.color};border-bottom:1px solid ${m.color};border-radius:0 0 4px 4px;pointer-events:none;z-index:0">${weekTicksHTML(ml,mw,'rgba(255,255,255,.15)')}${offDaysHTML(ml,mw,opSet)}</div>`;
+      barsHtml+=`<div class="${opSet?'seg-host':''}" style="position:absolute;left:${ml}px;width:${mw}px;top:${titleH}px;height:${heliH*m.hc}px;background:${m.color};border-left:1px solid ${m.color};border-right:1px solid ${m.color};border-bottom:1px solid ${m.color};border-radius:0 0 4px 4px;pointer-events:none;z-index:0">${opSet?segsHTML('hseg',ml,mw,opSet,m.color,'0 0 3px 3px'):weekTicksHTML(ml,mw,'rgba(255,255,255,.15)')}</div>`;
       // Mission name below the bar
       barsHtml+=`<div style="position:absolute;left:${ml}px;width:${mw}px;top:${titleH+heliH*m.hc}px;font-size:8px;font-weight:600;color:${m.color};text-align:center;pointer-events:none;white-space:nowrap;overflow:visible;z-index:3">${m.name}</div>`;
       // Per-heli drop zones and assignment bars
       for(let hi=0;hi<m.hc;hi++){
         const laneTop=titleH+hi*heliH;
-        if(hi>0) barsHtml+=`<div style="position:absolute;top:${laneTop}px;left:${ml}px;width:${mw}px;height:1px;background:${m.color};opacity:.2;pointer-events:none;z-index:1"></div>`;
+        if(hi>0) for(const _r of opRuns(ml,mw,opSet)) barsHtml+=`<div style="position:absolute;top:${laneTop}px;left:${ml+_r[0]}px;width:${_r[1]}px;height:1px;background:${m.color};opacity:.2;pointer-events:none;z-index:1"></div>`;
         barsHtml+=`<div class="h-drop" data-mid="${m.id}" data-hi="${hi}" style="position:absolute;top:${laneTop}px;left:${ml}px;width:${mw}px;height:${heliH}px;z-index:0"></div>`;
         const arr=gA(m.id,hi);
         const _vm2=isViewerMode();
@@ -2064,9 +2096,11 @@ function adHocRows(missions,td){
           const off=p?!isOn(p,a.start):false;
           const fn=dispName(a.pilot);
           const safeP=a.pilot.replace(/'/g,"\\'");
-          barsHtml+=`<div class="abar${off?' offduty':''}" draggable="true" data-apilot="${a.pilot}" data-astart="${a.start}" data-aend="${a.end}" data-amid="${m.id}" data-ahi="${hi}" style="left:${al}px;width:${aw}px;top:${laneTop+3}px;height:${heliH-6}px;background:${p?gc(pg(p)):'#666'}" title="${a.pilot}: ${a.start}→${a.end}${off?' (OFF!)':''}">
+          const aCol=p?gc(pg(p)):'#666';
+          barsHtml+=`<div class="abar${off?' offduty':''}${opSet?' seg-host':''}" draggable="true" data-apilot="${a.pilot}" data-astart="${a.start}" data-aend="${a.end}" data-amid="${m.id}" data-ahi="${hi}" style="left:${al}px;width:${aw}px;top:${laneTop+3}px;height:${heliH-6}px;background:${aCol}" title="${a.pilot}: ${a.start}→${a.end}${off?' (OFF!)':''}">
+            ${opSet?segsHTML('aseg',al,aw,opSet,aCol,'3px'):''}
             <span class="abar-grip abar-grip-l" data-edge="start" data-apilot="${a.pilot}" data-astart="${a.start}" data-aend="${a.end}" data-amid="${m.id}" data-ahi="${hi}"></span>
-            ${aw>110?`<span class="abar-date abar-date-l">${fmtDM(a.start)}</span>`:''}${fn}${aw>110?`<span class="abar-date abar-date-r">${fmtDM(a.end)}</span>`:''}
+            ${aw>110?`<span class="abar-date abar-date-l">${fmtDM(a.start)}</span>`:''}${opSet?`<span class="abar-chip" style="background:${aCol}">${fn}</span>`:fn}${aw>110?`<span class="abar-date abar-date-r">${fmtDM(a.end)}</span>`:''}
             <span class="abar-grip abar-grip-r" data-edge="end" data-apilot="${a.pilot}" data-astart="${a.start}" data-aend="${a.end}" data-amid="${m.id}" data-ahi="${hi}"></span>
             <span class="ax" onclick="event.stopPropagation();remAs('${m.id}',${hi},'${safeP}','${a.start}');render()">×</span>
           </div>`;
@@ -2865,6 +2899,8 @@ function handleDrop(e,mid,hi){
   endDate = weekThu > m.end ? m.end : weekThu;
 
   if(endDate < startDate) return;
+  [startDate, endDate] = trimToOpDays(startDate, endDate, parseOpDays(m.operatingDays));
+  if(!startDate) return;
 
   // No conflict check — allow all assignments
 
@@ -2898,9 +2934,11 @@ function setupDrops(){
       const daysSinceFri=(dropDow-5+7)%7;
       const weekFri=addDaysL(dropDate,-daysSinceFri);
       const weekThu=addDaysL(weekFri,6);
-      const startDate=weekFri<m.start?m.start:weekFri;
-      const endDate=weekThu>m.end?m.end:weekThu;
+      let startDate=weekFri<m.start?m.start:weekFri;
+      let endDate=weekThu>m.end?m.end:weekThu;
       if(endDate<startDate) return;
+      [startDate,endDate]=trimToOpDays(startDate,endDate,parseOpDays(m.operatingDays));
+      if(!startDate) return;
       // Show pilot picker popup
       if(pop) pop.remove();
       const div=document.createElement('div');div.className='pop';
