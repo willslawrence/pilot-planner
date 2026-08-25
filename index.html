@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Pilot Availability Planner v3.93 — THC H125</title>
+<title>Pilot Availability Planner v3.94 — THC H125</title>
 <style>
 :root {
   --bg: #0f1123;
@@ -74,18 +74,13 @@ html.light .m-row { background:#fff; }
 .mbar { position:absolute; top:6px; bottom:6px; border-radius:4px; display:flex; align-items:center; padding:0 8px; font-size:10px; font-weight:600; color:#fff; overflow:hidden; white-space:nowrap; border:1px solid var(--mbar-border); cursor:grab; justify-content:center; }
 .mbar:active { cursor:grabbing; }
 .mbar-date { position:absolute; bottom:1px; font-size:9px; font-weight:600; opacity:.8; white-space:nowrap; z-index:2; }
-/* Operating days: a mission that runs only on some weekdays is drawn as one
-   SEGMENT per stretch of operating days, not as a solid bar with a mask over
-   it. Painting over a bar left its own 1px border showing as a hairline
-   through every gap, and could not let the row's month shading through. A gap
-   here is genuinely empty. */
-.mseg, .hseg, .aseg { position:absolute; top:0; bottom:0; pointer-events:none; }
+/* Operating days: the AIRCRAFT LANE is drawn as one SEGMENT per stretch of
+   operating days, so the gaps are genuinely empty — masking a solid bar left
+   its own 1px border showing as a hairline and hid the row's month shading.
+   The mission title bar and the pilot assignment bars stay CONTINUOUS spans
+   (Will, 2026-08-25): they answer "how long", the lane answers "which days". */
+.hseg { position:absolute; top:0; bottom:0; pointer-events:none; }
 .seg-host { background:transparent!important; border-color:transparent!important; }
-.abar.seg-host { background-image:none!important; }
-.abar.offduty .aseg { background-image:repeating-linear-gradient(45deg,transparent,transparent 3px,rgba(0,0,0,.25) 3px,rgba(0,0,0,.25) 6px); }
-/* The pilot name rides above the segments on its own chip so it stays legible
-   where it crosses a gap. */
-.abar-chip { position:relative; z-index:1; padding:0 4px; border-radius:3px; }
 .mbar-start { left:6px; }
 .mbar-end { right:6px; }
 .mbar-name { font-size:10px; font-weight:700; z-index:2; }
@@ -319,7 +314,7 @@ body.has-pilot-focus .p-row.pilot-focused .pname { font-weight:700; color:var(--
   <div class="leg"><input type="color" id="cc-proposedOn" style="width:14px;height:14px;border:none;padding:0;cursor:pointer;border-radius:2px" onchange="ROT_COLORS.proposedOn=this.value;saveRotColors();render()"> Proposed On</div>
   <div class="leg"><input type="color" id="cc-proposedOff" style="width:14px;height:14px;border:none;padding:0;cursor:pointer;border-radius:2px" onchange="ROT_COLORS.proposedOff=this.value;saveRotColors();render()"> Proposed Off</div>
   <div class="leg"><div class="lsw" style="background:var(--yellow)"></div> Cursor</div>
-  <span id="app-version" style="font-size:10px;opacity:.5;cursor:pointer;margin-left:4px;user-select:none">v3.93</span>
+  <span id="app-version" style="font-size:10px;opacity:.5;cursor:pointer;margin-left:4px;user-select:none">v3.94</span>
   <span id="legend-hint" style="margin-left:auto;font-size:10px">Add a note about 'Vacation' or 'Availability' with the + Add Rotation button.</span>
 </div>
 
@@ -1950,8 +1945,8 @@ function missionRows(m,td){
   if(ml>0) barsHtml+=`<div style="position:absolute;right:${td*DW-ml+4}px;top:0;height:${titleH}px;display:flex;align-items:center;font-size:9px;font-weight:600;color:${m.color};white-space:nowrap;pointer-events:none;z-index:3">${m.name}</div>`;
   let statusTip = m.status ? `${m.name}\nStatus: ${m.status}` : m.name;
   if(opSet) statusTip += `\nOperating days: ${opDaysLabel(opSet)}`;
-  barsHtml+=`<div class="mbar${opSet?' seg-host':''}" data-mid="${m.id}" title="${statusTip.replace(/"/g,'&quot;')}" style="left:${ml}px;width:${mw}px;height:${titleH}px;top:0;bottom:auto;background:${m.color};border:1px solid ${m.color};border-radius:4px 4px 0 0;cursor:grab;z-index:2">
-    ${opSet?segsHTML('mseg',ml,mw,opSet,m.color,'3px 3px 0 0'):weekTicksHTML(ml,mw,'rgba(255,255,255,.2)')}
+  barsHtml+=`<div class="mbar" data-mid="${m.id}" title="${statusTip.replace(/"/g,'&quot;')}" style="left:${ml}px;width:${mw}px;height:${titleH}px;top:0;bottom:auto;background:${m.color};border:1px solid ${m.color};border-radius:4px 4px 0 0;cursor:grab;z-index:2">
+    ${weekTicksHTML(ml,mw,'rgba(255,255,255,.2)')}
     ${mw>=100?`<span class="mbar-date mbar-start" style="color:rgba(255,255,255,.9)">${fmtDM(m.start)}</span>`:''}
     ${mw>=100?`<span class="mbar-date mbar-end" style="color:rgba(255,255,255,.9)">${fmtDM(m.end)}</span>`:''}
   </div>`;
@@ -2017,11 +2012,10 @@ function missionRows(m,td){
         barH = laneH-6;
       }
       const aCol=p?gc(pg(p)):'#666';
-      if(opSet) cls+=' seg-host';
       barsHtml+=`<div class="${cls}" draggable="true" data-apilot="${a.pilot}" data-astart="${a.start}" data-aend="${a.end}" data-amid="${m.id}" data-ahi="${hi}" style="left:${al}px;width:${aw}px;top:${barTop}px;height:${barH}px;background:${aCol}" title="${a.pilot}: ${a.start}→${a.end}${off?' (OFF!)':''}${a.note?'\n'+a.note.replace(/"/g,'&quot;'):''}">
-        ${opSet?segsHTML('aseg',al,aw,opSet,aCol,'3px'):weekTicksHTML(al,aw,'rgba(255,255,255,.2)')}
+        ${weekTicksHTML(al,aw,'rgba(255,255,255,.2)')}
         <span class="abar-grip abar-grip-l" data-edge="start" data-apilot="${a.pilot}" data-astart="${a.start}" data-aend="${a.end}" data-amid="${m.id}" data-ahi="${hi}"></span>
-        ${aw>110?`<span class="abar-date abar-date-l">${fmtDM(a.start)}</span>`:''}${opSet?`<span class="abar-chip" style="background:${aCol}">${fn}</span>`:fn}${aw>110?`<span class="abar-date abar-date-r">${fmtDM(a.end)}</span>`:''}
+        ${aw>110?`<span class="abar-date abar-date-l">${fmtDM(a.start)}</span>`:''}${fn}${aw>110?`<span class="abar-date abar-date-r">${fmtDM(a.end)}</span>`:''}
         <span class="abar-grip abar-grip-r" data-edge="end" data-apilot="${a.pilot}" data-astart="${a.start}" data-aend="${a.end}" data-amid="${m.id}" data-ahi="${hi}"></span>
         <span class="ax" onclick="event.stopPropagation();remAs('${m.id}',${hi},'${safeP}','${a.start}');render()">×</span>
       </div>`;
@@ -2073,8 +2067,8 @@ function adHocRows(missions,td){
       const opSet=parseOpDays(m.operatingDays);
       const mTotalH=titleH+heliH*m.hc;
       // Title bar — ad hoc: no inline name (too cramped in shared lanes), hover tooltip instead
-      barsHtml+=`<div class="mbar${opSet?' seg-host':''}" data-mid="${m.id}" title="${m.name}${m.hc>1?' ('+m.hc+'x)':''}${opSet?'\nOperating days: '+opDaysLabel(opSet):''}" style="left:${ml}px;width:${mw}px;height:${titleH}px;top:0;bottom:auto;background:${m.color};border:1px solid ${m.color};border-radius:4px 4px 0 0;cursor:pointer;z-index:2" onclick="showPop(event,'${m.id}')">
-        ${opSet?segsHTML('mseg',ml,mw,opSet,m.color,'3px 3px 0 0'):weekTicksHTML(ml,mw,'rgba(255,255,255,.2)')}
+      barsHtml+=`<div class="mbar" data-mid="${m.id}" title="${m.name}${m.hc>1?' ('+m.hc+'x)':''}${opSet?'\nOperating days: '+opDaysLabel(opSet):''}" style="left:${ml}px;width:${mw}px;height:${titleH}px;top:0;bottom:auto;background:${m.color};border:1px solid ${m.color};border-radius:4px 4px 0 0;cursor:pointer;z-index:2" onclick="showPop(event,'${m.id}')">
+        ${weekTicksHTML(ml,mw,'rgba(255,255,255,.2)')}
         ${mw>=100?`<span class="mbar-date mbar-start" style="color:rgba(255,255,255,.9)">${fmtDM(m.start)}</span>`:''}
         ${mw>=100?`<span class="mbar-date mbar-end" style="color:rgba(255,255,255,.9)">${fmtDM(m.end)}</span>`:''}
       </div>`;
@@ -2097,10 +2091,9 @@ function adHocRows(missions,td){
           const fn=dispName(a.pilot);
           const safeP=a.pilot.replace(/'/g,"\\'");
           const aCol=p?gc(pg(p)):'#666';
-          barsHtml+=`<div class="abar${off?' offduty':''}${opSet?' seg-host':''}" draggable="true" data-apilot="${a.pilot}" data-astart="${a.start}" data-aend="${a.end}" data-amid="${m.id}" data-ahi="${hi}" style="left:${al}px;width:${aw}px;top:${laneTop+3}px;height:${heliH-6}px;background:${aCol}" title="${a.pilot}: ${a.start}→${a.end}${off?' (OFF!)':''}">
-            ${opSet?segsHTML('aseg',al,aw,opSet,aCol,'3px'):''}
+          barsHtml+=`<div class="abar${off?' offduty':''}" draggable="true" data-apilot="${a.pilot}" data-astart="${a.start}" data-aend="${a.end}" data-amid="${m.id}" data-ahi="${hi}" style="left:${al}px;width:${aw}px;top:${laneTop+3}px;height:${heliH-6}px;background:${aCol}" title="${a.pilot}: ${a.start}→${a.end}${off?' (OFF!)':''}">
             <span class="abar-grip abar-grip-l" data-edge="start" data-apilot="${a.pilot}" data-astart="${a.start}" data-aend="${a.end}" data-amid="${m.id}" data-ahi="${hi}"></span>
-            ${aw>110?`<span class="abar-date abar-date-l">${fmtDM(a.start)}</span>`:''}${opSet?`<span class="abar-chip" style="background:${aCol}">${fn}</span>`:fn}${aw>110?`<span class="abar-date abar-date-r">${fmtDM(a.end)}</span>`:''}
+            ${aw>110?`<span class="abar-date abar-date-l">${fmtDM(a.start)}</span>`:''}${fn}${aw>110?`<span class="abar-date abar-date-r">${fmtDM(a.end)}</span>`:''}
             <span class="abar-grip abar-grip-r" data-edge="end" data-apilot="${a.pilot}" data-astart="${a.start}" data-aend="${a.end}" data-amid="${m.id}" data-ahi="${hi}"></span>
             <span class="ax" onclick="event.stopPropagation();remAs('${m.id}',${hi},'${safeP}','${a.start}');render()">×</span>
           </div>`;
