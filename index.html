@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Pilot Availability Planner v3.98 — THC H125</title>
+<title>Pilot Availability Planner v3.99 — THC H125</title>
 <style>
 :root {
   --bg: #0f1123;
@@ -316,7 +316,7 @@ body.has-pilot-focus .p-row.pilot-focused .pname { font-weight:700; color:var(--
   <div class="leg"><input type="color" id="cc-proposedOn" style="width:14px;height:14px;border:none;padding:0;cursor:pointer;border-radius:2px" onchange="ROT_COLORS.proposedOn=this.value;saveRotColors();render()"> Proposed On</div>
   <div class="leg"><input type="color" id="cc-proposedOff" style="width:14px;height:14px;border:none;padding:0;cursor:pointer;border-radius:2px" onchange="ROT_COLORS.proposedOff=this.value;saveRotColors();render()"> Proposed Off</div>
   <div class="leg"><div class="lsw" style="background:var(--yellow)"></div> Cursor</div>
-  <span id="app-version" style="font-size:10px;opacity:.5;cursor:pointer;margin-left:4px;user-select:none">v3.98</span>
+  <span id="app-version" style="font-size:10px;opacity:.5;cursor:pointer;margin-left:4px;user-select:none">v3.99</span>
   <span id="legend-hint" style="margin-left:auto;font-size:10px">Add a note about 'Vacation' or 'Availability' with the + Add Rotation button.</span>
 </div>
 
@@ -3206,7 +3206,7 @@ function showPop(e,id){
   }
   heliHtml += '</div>';
 
-  div.innerHTML=`<label>Name</label><input id="pn" value="${m.name}"><label>Type</label><select id="pt"><option value="UAM"${m.type==='UAM'?' selected':''}>UAM</option><option value="Survey"${m.type==='Survey'?' selected':''}>Survey</option><option value="Training"${m.type==='Training'?' selected':''}>Training</option><option value="Rally"${m.type==='Rally'?' selected':''}>Ad Hoc (Rally)</option><option value="Ad Hoc"${m.type==='Ad Hoc'?' selected':''}>Ad Hoc</option></select><label>Color</label><input type="color" id="pc" value="${m.color}" style="height:32px;padding:2px;cursor:pointer"><label>Start</label><input type="date" id="ps" value="${m.start}"><label>End</label><input type="date" id="pe" value="${m.end}"><label>Helicopter Lanes</label><input type="number" id="ph" value="${m.hc}" min="1" max="10">${heliHtml}<div style="font-size:9px;color:var(--muted);margin-top:6px">Operating days: <b style="color:var(--text)">${opDaysLabel(parseOpDays(m.operatingDays))||'every day'}</b> <span style="opacity:.7">— set in Obsidian (<code>operating_days:</code>)</span></div><div class="pb"><button class="pdel" onclick="delM('${m.id}')">Delete</button><button class="pcancel" onclick="cPop()">Cancel</button><button class="psave" onclick="savePop('${m.id}')">Save</button></div>`;
+  div.innerHTML=`<label>Name</label><input id="pn" value="${m.name}"><label>Type</label><select id="pt"><option value="UAM"${m.type==='UAM'?' selected':''}>UAM</option><option value="Survey"${m.type==='Survey'?' selected':''}>Survey</option><option value="Training"${m.type==='Training'?' selected':''}>Training</option><option value="Rally"${m.type==='Rally'?' selected':''}>Ad Hoc (Rally)</option><option value="Ad Hoc"${m.type==='Ad Hoc'?' selected':''}>Ad Hoc</option></select><label>Color</label><input type="color" id="pc" value="${m.color}" style="height:32px;padding:2px;cursor:pointer"><label>Start</label><input type="date" id="ps" value="${m.start}"><label>End</label><input type="date" id="pe" value="${m.end}"><label>Helicopter Lanes</label><input type="number" id="ph" value="${m.hc}" min="1" max="10">${heliHtml}<div style="font-size:9px;color:var(--muted);margin-top:6px">Operating days: <b style="color:var(--text)">${opDaysLabel(parseOpDays(m.operatingDays))||'every day'}</b> <span style="opacity:.7">— read-only here</span></div><div class="pb"><button class="pdel" onclick="delM('${m.id}')">Delete</button><button class="pcancel" onclick="cPop()">Cancel</button><button class="psave" onclick="savePop('${m.id}')">Save</button></div>`;
   document.body.appendChild(div);pop=div;
   const popRect=div.getBoundingClientRect();
   div.style.top=Math.max(8,Math.min(e.clientY+5,innerHeight-popRect.height-8))+'px';
