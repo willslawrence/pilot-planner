@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Pilot Availability Planner v3.99 — THC H125</title>
+<title>Pilot Availability Planner v4.00 — THC H125</title>
 <style>
 :root {
   --bg: #0f1123;
@@ -128,6 +128,17 @@ body.simulate-mode .sim-banner { display:block; }
 .duty-blk.workover { opacity:.55; z-index:2; top:5px!important; bottom:5px!important; height:auto!important; background-image:repeating-linear-gradient(45deg,transparent,transparent 4px,rgba(66,165,245,.4) 4px,rgba(66,165,245,.4) 8px); }
 .duty-blk.vacation-extra { opacity:.55; z-index:2; top:5px!important; bottom:5px!important; height:auto!important; background-image:repeating-linear-gradient(45deg,transparent,transparent 4px,rgba(255,255,255,.15) 4px,rgba(255,255,255,.15) 8px); }
 .duty-blk.training { opacity:.55; z-index:2; top:5px!important; bottom:5px!important; height:auto!important; background-image:repeating-linear-gradient(45deg,transparent,transparent 4px,rgba(255,255,255,.15) 4px,rgba(255,255,255,.15) 8px); }
+/* Base month, Part 135. Same geometry as .workover / .vacation-extra: a thin bar
+   inset 5px top and bottom, laid over the full-height ON/OFF block. Kept well
+   under half opacity ON PURPOSE — the check is scheduled against ON days, so the
+   roster state underneath has to stay readable through it. */
+/* Transparency lives in the background alphas, NOT in `opacity` — an element-level
+   opacity dims the label with the stripe and the words stop being readable. */
+.duty-blk.base-month { z-index:4; top:5px!important; bottom:5px!important; height:auto!important; border-radius:3px; background-color:rgba(30,136,229,.16); box-shadow:0 0 0 1px rgba(30,136,229,.34) inset; background-image:repeating-linear-gradient(45deg,rgba(255,255,255,.42),rgba(255,255,255,.42) 4px,transparent 4px,transparent 8px); pointer-events:none; }
+.duty-blk.base-month .bml { font-size:8px; font-weight:800; letter-spacing:.4px; white-space:nowrap; text-transform:uppercase; color:#0d4a7a; opacity:.75; }
+html:not(.light) .duty-blk.base-month { background-color:rgba(79,163,227,.18); box-shadow:0 0 0 1px rgba(79,163,227,.38) inset; background-image:repeating-linear-gradient(45deg,rgba(255,255,255,.30),rgba(255,255,255,.30) 4px,transparent 4px,transparent 8px); }
+html:not(.light) .duty-blk.base-month .bml { color:#bfe0fa; opacity:.8; }
+body.hide-basemonth .duty-blk.base-month { display:none!important; }
 .duty-blk.available-workover { opacity:1; z-index:2; top:5px!important; bottom:5px!important; height:auto!important; background-image:repeating-linear-gradient(45deg,transparent,transparent 4px,rgba(255,255,255,.15) 4px,rgba(255,255,255,.15) 8px); border-radius:3px; }
 
 .pa-block { position:absolute; top:7px; height:13px; border-radius:3px; display:flex; align-items:center; padding:0 4px; font-size:7px; font-weight:700; color:#fff; z-index:3; overflow:hidden; white-space:nowrap; text-overflow:ellipsis; border:1px solid rgba(255,255,255,.25); cursor:pointer; letter-spacing:.3px; }
@@ -277,6 +288,7 @@ body.has-pilot-focus .p-row.pilot-focused .pname { font-weight:700; color:var(--
     <label class="toggle admin-only-toggle" title="Hide all mission rows"><input type="checkbox" id="hideMissionsToggle" onchange="toggleHideMissions()"><span class="toggle-slider"></span><span class="toggle-lbl">Hide Missions</span></label>
     <label class="toggle" title="Show dual-rated pilots (hidden by default)"><input type="checkbox" id="dualRatedToggle" onchange="toggleDualRated()"><span class="toggle-slider"></span><span class="toggle-lbl">Dual Rated</span></label>
     <label class="toggle" title="Reveal pilot rows you've individually hidden so you can restore them"><input type="checkbox" id="showHiddenToggle" onchange="toggleShowHidden()"><span class="toggle-slider"></span><span class="toggle-lbl">Show Hidden</span></label>
+    <label class="toggle" title="Show each pilot's Part 135 base month"><input type="checkbox" id="baseMonthToggle" onchange="toggleBaseMonth()"><span class="toggle-slider"></span><span class="toggle-lbl">Base Month</span></label>
 
     <button id="chgBtn" onclick="toggleChangePanel()" title="Recent roster changes">🔔 Changes<span id="chgBadge"></span></button>
     <button onclick="window.open('https://willslawrence.github.io/thc-fleet-map-v2/','_blank')" title="Open Fleet Map">🗺️ Fleet Map</button>
@@ -316,7 +328,7 @@ body.has-pilot-focus .p-row.pilot-focused .pname { font-weight:700; color:var(--
   <div class="leg"><input type="color" id="cc-proposedOn" style="width:14px;height:14px;border:none;padding:0;cursor:pointer;border-radius:2px" onchange="ROT_COLORS.proposedOn=this.value;saveRotColors();render()"> Proposed On</div>
   <div class="leg"><input type="color" id="cc-proposedOff" style="width:14px;height:14px;border:none;padding:0;cursor:pointer;border-radius:2px" onchange="ROT_COLORS.proposedOff=this.value;saveRotColors();render()"> Proposed Off</div>
   <div class="leg"><div class="lsw" style="background:var(--yellow)"></div> Cursor</div>
-  <span id="app-version" style="font-size:10px;opacity:.5;cursor:pointer;margin-left:4px;user-select:none">v3.99</span>
+  <span id="app-version" style="font-size:10px;opacity:.5;cursor:pointer;margin-left:4px;user-select:none">v4.00</span>
   <span id="legend-hint" style="margin-left:auto;font-size:10px">Add a note about 'Vacation' or 'Availability' with the + Add Rotation button.</span>
 </div>
 
@@ -808,6 +820,10 @@ async function fetchFromAPI() {
       displayName: pilot.DisplayName || pilot.Name,
       fleetplanID: pilot.FleetplanID,
       pairGroup: pilot.PairGroup,
+      // Month the P135 competency check was completed. Read-only here; the vault
+      // owns it and sync_obsidian_pilots.py writes Pilots!BaseMonth. Blank is normal
+      // for a pilot who has not had a competency check yet.
+      baseMonth: pilot.BaseMonth || '',
       // Coerce exactly like Temp/DualRated below. Read RAW this was a live data-loss bug:
       // a cell holding the TEXT "FALSE" is a non-empty string -> truthy -> the pilot is
       // treated as management, their roster is collapsed to one ON block, and the next
@@ -2316,6 +2332,42 @@ function sharedMissionRow(lane,td){
   return `<div class="row m-row" style="min-height:${totalH}px"><div class="rlabel" style="min-height:${totalH}px">${labelHtml}</div><div class="rbars" style="width:${td*DW}px;height:${totalH}px;position:relative">${barsHtml}</div></div>`;
 }
 
+// A pilot's base month is the month their P135 competency check was completed; it
+// recurs every year and is painted for every year on the timeline. It says ONLY
+// which month it is — never whether the check is done, due or stale. That is
+// Currency Watch's job, and encoding it here would need a colour legend and
+// turn a glance into a lookup. No base month = no block, which is correct.
+const BM_MONTHS=['january','february','march','april','may','june','july','august','september','october','november','december'];
+function baseMonthBlocks(p,td){
+  const mi = p && p.baseMonth ? BM_MONTHS.indexOf(String(p.baseMonth).trim().toLowerCase()) : -1;
+  if(mi<0) return '';
+  let html='';
+  const yFrom=T0.getFullYear(), yTo=new Date(T0.getTime()+(td-1)*864e5).getFullYear();
+  for(let yr=yFrom; yr<=yTo; yr++){
+    const d0=dO(new Date(yr,mi,1)), d1=dO(new Date(yr,mi+1,0));
+    if(d1<0 || d0>td-1) continue;
+    const a=Math.max(0,d0), b=Math.min(td-1,d1);
+    const left=a*DW, w=(b-a+1)*DW;
+    if(w<=0) continue;
+    html+=`<div class="duty-blk base-month" title="Base month \u2014 Part 135" style="left:${left}px;width:${w}px">`
+        + (w>=64?'<span class="bml">BASE MONTH</span>':'') + `</div>`;
+  }
+  return html;
+}
+function toggleBaseMonth(){
+  const on=document.getElementById('baseMonthToggle').checked;
+  document.body.classList.toggle('hide-basemonth',!on);
+  localStorage.setItem('pp_baseMonth',on?'1':'0');
+}
+// Default OFF, so the board looks exactly as it did until someone asks for it.
+(function(){
+  const on=localStorage.getItem('pp_baseMonth')==='1';
+  document.body.classList.toggle('hide-basemonth',!on);
+  document.addEventListener('DOMContentLoaded',()=>{
+    const cb=document.getElementById('baseMonthToggle'); if(cb) cb.checked=on;
+  });
+})();
+
 function pilotRow(p,td,ds){
   const g=pg(p), on=isOn(p,ds);
   let bars='';
@@ -2365,6 +2417,8 @@ function pilotRow(p,td,ds){
       </div>`;
     }
   }
+  // Base month sits above the rotation blocks and below the assignment blocks.
+  bars+=baseMonthBlocks(p,td);
   // Pilot assignment blocks on pilot row
   const assignments=pAs(p.name);
   const merged={};
