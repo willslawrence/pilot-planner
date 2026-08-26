@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Pilot Availability Planner v4.00 — THC H125</title>
+<title>Pilot Planner v4.01 — THC H125</title>
 <style>
 :root {
   --bg: #0f1123;
@@ -47,8 +47,10 @@ html.light {
 body { font-family: system-ui,-apple-system,sans-serif; background:var(--bg); color:var(--text); height:100vh; overflow:hidden; display:flex; flex-direction:column; }
 
 .header { padding:8px 20px; display:flex; align-items:center; gap:14px; border-bottom:1px solid var(--border); flex-shrink:0; }
-.header h1 { font-size:17px; flex:1; }
-.ctrls { display:flex; align-items:center; gap:5px; }
+.header h1 { font-size:17px; flex-shrink:0; white-space:nowrap; }
+/* Toggles left (right of the title) and free to wrap; buttons pinned right. */
+.tgls { display:flex; align-items:center; gap:10px; flex:1; flex-wrap:wrap; min-width:0; }
+.ctrls { display:flex; align-items:center; gap:5px; flex-shrink:0; }
 .ctrls input[type=date] { background:var(--surface); border:1px solid var(--border); color:var(--text); padding:4px 8px; border-radius:5px; font-size:11px; }
 .ctrls button { background:var(--surface2); border:1px solid var(--border); color:var(--text); padding:4px 10px; border-radius:5px; cursor:pointer; font-size:11px; font-weight:600; }
 .ctrls button:hover { border-color:var(--accent); }
@@ -278,18 +280,20 @@ body.has-pilot-focus .p-row.pilot-focused .pname { font-weight:700; color:var(--
 <body>
 
 <div class="header">
-  <h1>🚁 Pilot Availability Planner <button id="simBtn" onclick="toggleSimulate()" title="Simulate pilot coverage without saving to sheet" style="background:none;border:none;cursor:pointer;font-size:14px;padding:2px 4px;vertical-align:middle;opacity:.6">🎮</button></h1>
-  <div class="ctrls">
-    <button onclick="showWorkoverPop(event)" title="Add a rotation for a pilot" id="addRotBtn">+ Work Over</button>
+  <h1>🚁 Pilot Planner</h1>
+  <!-- Toggles sit left, immediately after the title; the action buttons stay right. -->
+  <div class="tgls">
     <label class="toggle admin-only-toggle" title="Toggle pilot coverage on roster rows"><input type="checkbox" id="covToggle" checked onchange="toggleCoverage()"><span class="toggle-slider"></span><span class="toggle-lbl">Roster Coverage</span></label>
     <label class="toggle admin-only-toggle" title="Toggle pilot assignments on mission bars"><input type="checkbox" id="missionAssignToggle" checked onchange="toggleMissionAssign()"><span class="toggle-slider"></span><span class="toggle-lbl">Mission Assignments</span></label>
-    <label class="toggle" title="Toggle available rotation bars"><input type="checkbox" id="availToggle" onchange="toggleAvailable()"><span class="toggle-slider"></span><span class="toggle-lbl">Available</span></label>
-    <label class="toggle" title="Toggle proposed (not yet agreed) rotation bars"><input type="checkbox" id="propToggle" checked onchange="toggleProposed()"><span class="toggle-slider"></span><span class="toggle-lbl">Proposed</span></label>
+    <label class="toggle" title="Toggle pilot-added rotation bars"><input type="checkbox" id="availToggle" onchange="toggleAvailable()"><span class="toggle-slider"></span><span class="toggle-lbl">Pilot Added</span></label>
+    <label class="toggle admin-only-toggle" title="Toggle proposed (not yet agreed) rotation bars"><input type="checkbox" id="propToggle" checked onchange="toggleProposed()"><span class="toggle-slider"></span><span class="toggle-lbl">Proposed</span></label>
     <label class="toggle admin-only-toggle" title="Hide all mission rows"><input type="checkbox" id="hideMissionsToggle" onchange="toggleHideMissions()"><span class="toggle-slider"></span><span class="toggle-lbl">Hide Missions</span></label>
     <label class="toggle" title="Show dual-rated pilots (hidden by default)"><input type="checkbox" id="dualRatedToggle" onchange="toggleDualRated()"><span class="toggle-slider"></span><span class="toggle-lbl">Dual Rated</span></label>
-    <label class="toggle" title="Reveal pilot rows you've individually hidden so you can restore them"><input type="checkbox" id="showHiddenToggle" onchange="toggleShowHidden()"><span class="toggle-slider"></span><span class="toggle-lbl">Show Hidden</span></label>
+    <label class="toggle admin-only-toggle" title="Reveal pilot rows you've individually hidden so you can restore them"><input type="checkbox" id="showHiddenToggle" onchange="toggleShowHidden()"><span class="toggle-slider"></span><span class="toggle-lbl">Show Hidden</span></label>
     <label class="toggle" title="Show each pilot's Part 135 base month"><input type="checkbox" id="baseMonthToggle" onchange="toggleBaseMonth()"><span class="toggle-slider"></span><span class="toggle-lbl">Base Month</span></label>
-
+  </div>
+  <div class="ctrls">
+    <button onclick="showWorkoverPop(event)" title="Add a rotation for a pilot" id="addRotBtn">+ Work Over</button>
     <button id="chgBtn" onclick="toggleChangePanel()" title="Recent roster changes">🔔 Changes<span id="chgBadge"></span></button>
     <button onclick="window.open('https://willslawrence.github.io/thc-fleet-map-v2/','_blank')" title="Open Fleet Map">🗺️ Fleet Map</button>
     <button id="commitBtn" onclick="commitChanges()" title="Save changes to Google Sheets" style="position:relative;">💾 Commit</button>
@@ -324,12 +328,12 @@ body.has-pilot-focus .p-row.pilot-focused .pname { font-weight:700; color:var(--
   <div class="leg"><input type="color" id="cc-workover" style="width:14px;height:14px;border:none;padding:0;cursor:pointer;border-radius:2px" onchange="ROT_COLORS.workover=this.value;saveRotColors();render()"> Work Over</div>
   <div class="leg"><input type="color" id="cc-vacation" style="width:14px;height:14px;border:none;padding:0;cursor:pointer;border-radius:2px" onchange="ROT_COLORS.vacation=this.value;saveRotColors();render()"> Vacation</div>
   <div class="leg"><input type="color" id="cc-training" style="width:14px;height:14px;border:none;padding:0;cursor:pointer;border-radius:2px" onchange="ROT_COLORS.training=this.value;saveRotColors();render()"> Training</div>
-  <div class="leg"><input type="color" id="cc-available" style="width:14px;height:14px;border:none;padding:0;cursor:pointer;border-radius:2px" onchange="ROT_COLORS.available=this.value;saveRotColors();render()"> Available</div>
+  <div class="leg"><input type="color" id="cc-available" style="width:14px;height:14px;border:none;padding:0;cursor:pointer;border-radius:2px" onchange="ROT_COLORS.available=this.value;saveRotColors();render()"> Pilot Added</div>
   <div class="leg"><input type="color" id="cc-proposedOn" style="width:14px;height:14px;border:none;padding:0;cursor:pointer;border-radius:2px" onchange="ROT_COLORS.proposedOn=this.value;saveRotColors();render()"> Proposed On</div>
   <div class="leg"><input type="color" id="cc-proposedOff" style="width:14px;height:14px;border:none;padding:0;cursor:pointer;border-radius:2px" onchange="ROT_COLORS.proposedOff=this.value;saveRotColors();render()"> Proposed Off</div>
   <div class="leg"><div class="lsw" style="background:var(--yellow)"></div> Cursor</div>
-  <span id="app-version" style="font-size:10px;opacity:.5;cursor:pointer;margin-left:4px;user-select:none">v4.00</span>
-  <span id="legend-hint" style="margin-left:auto;font-size:10px">Add a note about 'Vacation' or 'Availability' with the + Add Rotation button.</span>
+  <span id="app-version" style="font-size:10px;opacity:.5;cursor:pointer;margin-left:4px;user-select:none">v4.01</span>
+  <span id="legend-hint" style="margin-left:auto;font-size:10px">Add a note about 'Vacation' or 'Pilot Added' with the + Add Rotation button.</span>
 </div>
 
 <script>
@@ -366,7 +370,7 @@ function notifyNtfy(title, message, tags){
 // Human-readable label for the rotation statuses that represent a pilot request,
 // or null for statuses that should not trigger a notification.
 function rotRequestLabel(st){
-  if(st === 'AVAILABLE_WORKOVER') return 'Available';
+  if(st === 'AVAILABLE_WORKOVER') return 'Pilot Added';
   if(st === 'WORKOVER') return 'Work Over';
   return null;
 }
@@ -419,6 +423,9 @@ setInterval(checkFreshness, 30 * 60 * 1000);
 
 // ====== ADMIN MODE ======
 let adminMode = false;
+// Simulation mode has no header button any more (removed 2026-08-26 — it was noise
+// for the people who actually read this board). The mode itself is intact and still
+// reachable at ?mode=simulate; every toggle site uses optional chaining on #simBtn.
 let simulateMode = false;
 function canEditAssignments(){ return adminMode || simulateMode; }
 // "Viewer mode" = neither admin nor simulate. The 45-day coverage filter
@@ -490,7 +497,7 @@ function applyModes(){
   if(addRotBtn) addRotBtn.textContent=adminMode?'+ Work Over':'+ Add Rotation';
   // Legend hint text
   const legendHint=document.getElementById('legend-hint');
-  if(legendHint) legendHint.textContent=adminMode?'Drag pilot → heli slot · Click mission label to edit · Click rotation bar to edit':(simulateMode?'🎮 Drag pilot → heli slot to simulate coverage (changes won\'t save)':"Add a note about 'Vacation' or 'Availability' with the + Add Rotation button.");
+  if(legendHint) legendHint.textContent=adminMode?'Drag pilot → heli slot · Click mission label to edit · Click rotation bar to edit':(simulateMode?'🎮 Drag pilot → heli slot to simulate coverage (changes won\'t save)':"Add a note about 'Vacation' or 'Pilot Added' with the + Add Rotation button.");
   // Assignment blocks: editable in admin or simulate
   document.querySelectorAll('.pa-block').forEach(blk=>{
     blk.style.cursor=canEdit?'pointer':'default';
@@ -584,7 +591,7 @@ const CHG_KIND = {
   workover: {icon:'💪', noun:'work over'},
   vacation: {icon:'🌴', noun:'vacation'},
   training: {icon:'📚', noun:'training'},
-  available:{icon:'🙋', noun:'availability'},
+  available:{icon:'🙋', noun:'pilot added'},
   proposed: {icon:'📝', noun:'proposed rotation'},
   pilot:    {icon:'👤', noun:'pilot'},
   other:    {icon:'📌', noun:'block'}
@@ -2514,7 +2521,7 @@ function showRotPop(e, pilot, ri){
       <option value="ON"${r.st==='ON'?' selected':''}>ON</option>
       <option value="OFF"${r.st==='OFF'?' selected':''}>OFF</option>
       <option value="WORKOVER"${r.st==='WORKOVER'?' selected':''}>WORKOVER</option>
-      <option value="AVAILABLE_WORKOVER"${r.st==='AVAILABLE_WORKOVER'?' selected':''}>AVAILABLE</option>
+      <option value="AVAILABLE_WORKOVER"${r.st==='AVAILABLE_WORKOVER'?' selected':''}>PILOT ADDED</option>
       <option value="VACATION_EXTRA"${r.st==='VACATION_EXTRA'?' selected':''}>VACATION</option>
       <option value="PROPOSED_ON"${r.st==='PROPOSED_ON'?' selected':''}>PROPOSED ON</option>
       <option value="PROPOSED_OFF"${r.st==='PROPOSED_OFF'?' selected':''}>PROPOSED OFF</option>
@@ -2660,7 +2667,7 @@ function showAddRotPop(e, pilotName){
       <option value="ON">ON</option>
       <option value="OFF">OFF</option>
       <option value="WORKOVER" selected>WORKOVER</option>
-      <option value="AVAILABLE_WORKOVER">AVAILABLE</option>
+      <option value="AVAILABLE_WORKOVER">PILOT ADDED</option>
       <option value="VACATION_EXTRA">VACATION</option>
       <option value="PROPOSED_ON">PROPOSED ON</option>
       <option value="PROPOSED_OFF">PROPOSED OFF</option>
