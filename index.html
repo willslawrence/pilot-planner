@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Pilot Planner v4.01 — THC H125</title>
+<title>Pilot Planner v4.02 — THC H125</title>
 <style>
 :root {
   --bg: #0f1123;
@@ -148,6 +148,10 @@ body.hide-coverage .pa-block { display:none!important; }
 .duty-blk.proposed-on, .duty-blk.proposed-off { opacity:.95; z-index:3; top:5px!important; bottom:5px!important; height:auto!important; border-radius:3px; background-image:repeating-linear-gradient(45deg,transparent,transparent 3px,rgba(255,255,255,.22) 3px,rgba(255,255,255,.22) 6px); box-shadow:0 0 0 1px rgba(255,255,255,.35) inset; }
 body.hide-available .duty-blk.available-workover { display:none!important; }
 body.hide-proposed .duty-blk.proposed-on, body.hide-proposed .duty-blk.proposed-off { display:none!important; }
+/* A PROPOSED_* block is a roster that has NOT been agreed. Non-admins get no toggle
+   for it (v4.01) and, from v4.02, no bars either — showing an unagreed roster to
+   someone who cannot tell it apart from the real one is worse than showing nothing. */
+body.viewer-mode .duty-blk.proposed-on, body.viewer-mode .duty-blk.proposed-off { display:none!important; }
 
 .week-shade { position:absolute; top:0; bottom:0; background:var(--week-shade); pointer-events:none; z-index:0; }
 .sun-border { position:absolute; top:0; bottom:0; width:2px; background:var(--sun-border-color); pointer-events:none; z-index:1; }
@@ -283,11 +287,10 @@ body.has-pilot-focus .p-row.pilot-focused .pname { font-weight:700; color:var(--
   <h1>🚁 Pilot Planner</h1>
   <!-- Toggles sit left, immediately after the title; the action buttons stay right. -->
   <div class="tgls">
-    <label class="toggle admin-only-toggle" title="Toggle pilot coverage on roster rows"><input type="checkbox" id="covToggle" checked onchange="toggleCoverage()"><span class="toggle-slider"></span><span class="toggle-lbl">Roster Coverage</span></label>
-    <label class="toggle admin-only-toggle" title="Toggle pilot assignments on mission bars"><input type="checkbox" id="missionAssignToggle" checked onchange="toggleMissionAssign()"><span class="toggle-slider"></span><span class="toggle-lbl">Mission Assignments</span></label>
+    <label class="toggle admin-only-toggle" title="Show pilot assignments — on mission bars and on roster rows"><input type="checkbox" id="assignToggle" checked onchange="toggleAssignments()"><span class="toggle-slider"></span><span class="toggle-lbl">Assignments</span></label>
     <label class="toggle" title="Toggle pilot-added rotation bars"><input type="checkbox" id="availToggle" onchange="toggleAvailable()"><span class="toggle-slider"></span><span class="toggle-lbl">Pilot Added</span></label>
     <label class="toggle admin-only-toggle" title="Toggle proposed (not yet agreed) rotation bars"><input type="checkbox" id="propToggle" checked onchange="toggleProposed()"><span class="toggle-slider"></span><span class="toggle-lbl">Proposed</span></label>
-    <label class="toggle admin-only-toggle" title="Hide all mission rows"><input type="checkbox" id="hideMissionsToggle" onchange="toggleHideMissions()"><span class="toggle-slider"></span><span class="toggle-lbl">Hide Missions</span></label>
+    <label class="toggle admin-only-toggle" title="Show mission rows"><input type="checkbox" id="missionsToggle" checked onchange="toggleMissions()"><span class="toggle-slider"></span><span class="toggle-lbl">Missions</span></label>
     <label class="toggle" title="Show dual-rated pilots (hidden by default)"><input type="checkbox" id="dualRatedToggle" onchange="toggleDualRated()"><span class="toggle-slider"></span><span class="toggle-lbl">Dual Rated</span></label>
     <label class="toggle admin-only-toggle" title="Reveal pilot rows you've individually hidden so you can restore them"><input type="checkbox" id="showHiddenToggle" onchange="toggleShowHidden()"><span class="toggle-slider"></span><span class="toggle-lbl">Show Hidden</span></label>
     <label class="toggle" title="Show each pilot's Part 135 base month"><input type="checkbox" id="baseMonthToggle" onchange="toggleBaseMonth()"><span class="toggle-slider"></span><span class="toggle-lbl">Base Month</span></label>
@@ -332,7 +335,7 @@ body.has-pilot-focus .p-row.pilot-focused .pname { font-weight:700; color:var(--
   <div class="leg"><input type="color" id="cc-proposedOn" style="width:14px;height:14px;border:none;padding:0;cursor:pointer;border-radius:2px" onchange="ROT_COLORS.proposedOn=this.value;saveRotColors();render()"> Proposed On</div>
   <div class="leg"><input type="color" id="cc-proposedOff" style="width:14px;height:14px;border:none;padding:0;cursor:pointer;border-radius:2px" onchange="ROT_COLORS.proposedOff=this.value;saveRotColors();render()"> Proposed Off</div>
   <div class="leg"><div class="lsw" style="background:var(--yellow)"></div> Cursor</div>
-  <span id="app-version" style="font-size:10px;opacity:.5;cursor:pointer;margin-left:4px;user-select:none">v4.01</span>
+  <span id="app-version" style="font-size:10px;opacity:.5;cursor:pointer;margin-left:4px;user-select:none">v4.02</span>
   <span id="legend-hint" style="margin-left:auto;font-size:10px">Add a note about 'Vacation' or 'Pilot Added' with the + Add Rotation button.</span>
 </div>
 
@@ -510,10 +513,11 @@ function applyModes(){
     document.body.classList.remove('hide-coverage');
     document.body.classList.remove('hide-mission-assign');
   } else {
-    const covEl=document.getElementById('covToggle');
-    if(covEl) document.body.classList.toggle('hide-coverage', !covEl.checked);
-    const masEl=document.getElementById('missionAssignToggle');
-    if(masEl) document.body.classList.toggle('hide-mission-assign', !masEl.checked);
+    const asgEl=document.getElementById('assignToggle');
+    if(asgEl){
+      document.body.classList.toggle('hide-coverage', !asgEl.checked);
+      document.body.classList.toggle('hide-mission-assign', !asgEl.checked);
+    }
   }
 }
 function applyAdminMode(){ applyModes(); }
@@ -528,19 +532,21 @@ function toggleProposed(){
   document.body.classList.toggle('hide-proposed',!cb.checked);
 }
 
-function toggleCoverage(){
-  const cb=document.getElementById('covToggle');
-  document.body.classList.toggle('hide-coverage',!cb.checked);
+// One control for both halves of the same idea (merged v4.02): coverage blocks on
+// roster rows and pilot chips on mission bars are the same information seen from
+// either end, and splitting them meant two switches to answer one question.
+function toggleAssignments(){
+  const on=document.getElementById('assignToggle').checked;
+  document.body.classList.toggle('hide-coverage',!on);
+  document.body.classList.toggle('hide-mission-assign',!on);
 }
 
-function toggleHideMissions(){
-  const cb=document.getElementById('hideMissionsToggle');
-  document.body.classList.toggle('hide-all-missions',cb.checked);
-}
-
-function toggleMissionAssign(){
-  const cb=document.getElementById('missionAssignToggle');
-  document.body.classList.toggle('hide-mission-assign',!cb.checked);
+// Reads positively now (v4.02): checked = missions shown. The old "Hide Missions"
+// was checked-to-hide, so ON meant less on screen — backwards against every other
+// toggle in this header.
+function toggleMissions(){
+  const cb=document.getElementById('missionsToggle');
+  document.body.classList.toggle('hide-all-missions',!cb.checked);
 }
 
 function toggleDualRated(){
