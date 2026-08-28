@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Pilot Planner v4.03 — THC H125</title>
+<title>Pilot Planner v4.04 — THC H125</title>
 <style>
 :root {
   --bg: #0f1123;
@@ -335,7 +335,7 @@ body.has-pilot-focus .p-row.pilot-focused .pname { font-weight:700; color:var(--
   <div class="leg"><input type="color" id="cc-proposedOn" style="width:14px;height:14px;border:none;padding:0;cursor:pointer;border-radius:2px" onchange="ROT_COLORS.proposedOn=this.value;saveRotColors();render()"> Proposed On</div>
   <div class="leg"><input type="color" id="cc-proposedOff" style="width:14px;height:14px;border:none;padding:0;cursor:pointer;border-radius:2px" onchange="ROT_COLORS.proposedOff=this.value;saveRotColors();render()"> Proposed Off</div>
   <div class="leg"><div class="lsw" style="background:var(--yellow)"></div> Cursor</div>
-  <span id="app-version" style="font-size:10px;opacity:.5;cursor:pointer;margin-left:4px;user-select:none">v4.03</span>
+  <span id="app-version" style="font-size:10px;opacity:.5;cursor:pointer;margin-left:4px;user-select:none">v4.04</span>
   <span id="legend-hint" style="margin-left:auto;font-size:10px">Add a note about 'Vacation' or 'Pilot Added' with the + Add Rotation button.</span>
 </div>
 
@@ -1001,7 +1001,9 @@ async function commitToAPI() {
           r.st || 'OFF',
           `${r.s}T00:00:00.000Z`,
           `${r.e}T00:00:00.000Z`,
-          p.fleetplanId || '',
+          p.fleetplanID || '',   // NOT fleetplanId — buildPilots sets capital-D `fleetplanID`.
+                                 // The typo silently wrote '' to Rotations!FleetplanID on
+                                 // every commit, blanking all 375 rows (found 2026-08-28).
           timestamp,
           r.note || ''
         ]);
