@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Pilot Planner v4.02 — THC H125</title>
+<title>Pilot Planner v4.03 — THC H125</title>
 <style>
 :root {
   --bg: #0f1123;
@@ -335,7 +335,7 @@ body.has-pilot-focus .p-row.pilot-focused .pname { font-weight:700; color:var(--
   <div class="leg"><input type="color" id="cc-proposedOn" style="width:14px;height:14px;border:none;padding:0;cursor:pointer;border-radius:2px" onchange="ROT_COLORS.proposedOn=this.value;saveRotColors();render()"> Proposed On</div>
   <div class="leg"><input type="color" id="cc-proposedOff" style="width:14px;height:14px;border:none;padding:0;cursor:pointer;border-radius:2px" onchange="ROT_COLORS.proposedOff=this.value;saveRotColors();render()"> Proposed Off</div>
   <div class="leg"><div class="lsw" style="background:var(--yellow)"></div> Cursor</div>
-  <span id="app-version" style="font-size:10px;opacity:.5;cursor:pointer;margin-left:4px;user-select:none">v4.02</span>
+  <span id="app-version" style="font-size:10px;opacity:.5;cursor:pointer;margin-left:4px;user-select:none">v4.03</span>
   <span id="legend-hint" style="margin-left:auto;font-size:10px">Add a note about 'Vacation' or 'Pilot Added' with the + Add Rotation button.</span>
 </div>
 
@@ -1014,6 +1014,8 @@ async function commitToAPI() {
     // load (see buildPilots) but used to be omitted here — every commit therefore blanked
     // it and dropped the dual-rated pilots out of their section until the Obsidian sync
     // happened to run again. A clear-then-write must write every column it clears.
+    // Same trap caught BaseMonth (column I) at v4.00 — the toggle went blank on the next
+    // commit. EVERY new Pilots column must be added here as well as to buildPilots.
     const pilotRows = PILOTS.map(p => [
       p.name,
       p.quals ? p.quals.join(', ') : '',
@@ -1022,7 +1024,8 @@ async function commitToAPI() {
       p.management ? 'TRUE' : 'FALSE',
       p.displayName || p.name,
       p.temp ? 'TRUE' : 'FALSE',
-      p.dualRated ? 'TRUE' : ''
+      p.dualRated ? 'TRUE' : '',
+      p.baseMonth || ''
     ]);
 
     // Diff BEFORE the write, against the baseline this page loaded. Wrapped
