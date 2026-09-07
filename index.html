@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Pilot Planner v4.05 — THC H125</title>
+<title>Pilot Planner v4.06 — THC H125</title>
 <style>
 :root {
   --bg: #0f1123;
@@ -335,7 +335,7 @@ body.has-pilot-focus .p-row.pilot-focused .pname { font-weight:700; color:var(--
   <div class="leg"><input type="color" id="cc-proposedOn" style="width:14px;height:14px;border:none;padding:0;cursor:pointer;border-radius:2px" onchange="ROT_COLORS.proposedOn=this.value;saveRotColors();render()"> Proposed On</div>
   <div class="leg"><input type="color" id="cc-proposedOff" style="width:14px;height:14px;border:none;padding:0;cursor:pointer;border-radius:2px" onchange="ROT_COLORS.proposedOff=this.value;saveRotColors();render()"> Proposed Off</div>
   <div class="leg"><div class="lsw" style="background:var(--yellow)"></div> Cursor</div>
-  <span id="app-version" style="font-size:10px;opacity:.5;cursor:pointer;margin-left:4px;user-select:none">v4.05</span>
+  <span id="app-version" style="font-size:10px;opacity:.5;cursor:pointer;margin-left:4px;user-select:none">v4.06</span>
   <span id="legend-hint" style="margin-left:auto;font-size:10px">Add a note about 'Vacation' or 'Pilot Added' with the + Add Rotation button.</span>
 </div>
 
@@ -1992,43 +1992,31 @@ function secRow(label,color,td){
   return `<div class="row sec-row" style="min-height:29px"><div class="rlabel" style="color:${color}">${label}</div><div class="rbars" style="width:${t*DW}px;height:29px">${months}${cells}</div></div>`;
 }
 
-// ── Mission row packing (v3.98, 2026-08-26) ───────────────────────────────
-// Two missions share one planner row when they never fly on the same day, so a
-// one-day mission stops reserving a whole row of its own. Two rules decide it:
+// ── Mission row packing (rewritten v4.06, 2026-09-07) ─────────────────────
+// Two missions share one planner row ONLY when their date ranges never touch.
+// That is the whole rule now. A one-day mission still stops reserving a row of
+// its own — it rides along with something that finished before it started —
+// but nothing that is on the board at the same time ever shares a row.
 //
-//   1. OPERATING DAYS. A mission occupies only the weekdays it actually flies
-//      (`operating_days:` in Obsidian). Riyadh UAM (Sun–Thu) and City Tour
-//      (Fri/Sat) never share a day, so they can interleave in one lane — their
-//      bars are drawn segmented per operating run, which is what stops them
-//      colliding. A mission with no operating_days flies every day.
-//   2. PAUSED IS DORMANT — BUT IT STILL KEEPS ITS OWN ROW (v4.05, 2026-09-07).
-//      A `paused` mission is not flying, so it renders as a slim ~22px hatched
-//      strip rather than holding a full 31px helicopter lane. It does NOT get
-//      folded in behind an active mission any more. It used to: Riyadh UAM
-//      (paused) was the first mission in Sheet order, so it anchored the row
-//      and put its name on it — while the entire visible purple lane underneath
-//      belonged to City Tour. The row read "Riyadh UAM" and showed City Tour.
-//      Two missions in one row is exactly the collision packing was meant to
-//      avoid (Will, 2026-09-07). Dormant now only ever shares with dormant.
+// WHY THE OLD RULE FAILED. v3.98 also packed missions whose *operating days*
+// never coincided: Riyadh UAM (Sun–Thu) and City Tour (Fri/Sat) went in one
+// lane on the theory that segmented bars would interleave. Only the 13px title
+// bars were ever segmented. The 31px helicopter lane underneath is painted as
+// one full-span rectangle (`heli-lane-bg`, faded mission colour) with the
+// operating days drawn *on top* of it — so the second mission's lane simply
+// covered the first's, and both left-hand name labels landed at the same x and
+// printed over each other ("City TourayaOphAMions"). Overlapping in time meant
+// overlapping on screen, no matter how the weekdays lined up.
+// (Will, 2026-09-07 — reported twice; v4.05 fixed only the paused case.)
+//
+// Paused missions still render as a slim ~22px hatched strip instead of holding
+// a full helicopter lane — they just no longer get folded in behind an active
+// mission to do it.
 function isDormant(m){ return String(m.status||'').trim().toLowerCase()==='paused'; }
 
-// True when a and b may not share a row. Two dormant missions still pack
-// together — neither draws a lane, so their hatched strips cannot collide.
+// True when a and b may not share a row: any overlap in dates at all.
 function missionsConflict(a,b){
-  const da=isDormant(a), db=isDormant(b);
-  if(da!==db) return true;                                  // paused never rides with active
-  if(da&&db) return a.start<=b.end && a.end>=b.start;        // two strips: only dates matter
-  if(a.start>b.end || a.end<b.start) return false;          // date ranges disjoint
-  const sa=parseOpDays(a.operatingDays), sb=parseOpDays(b.operatingDays);
-  const flies=(set,w)=> !set || set.has(w);                 // null set = every day
-  const s=a.start>b.start?a.start:b.start, e=a.end<b.end?a.end:b.end;
-  const d=D(s), end=D(e);
-  while(d<=end){
-    const w=d.getDay();
-    if(flies(sa,w)&&flies(sb,w)) return true;
-    d.setDate(d.getDate()+1);
-  }
-  return false;
+  return a.start<=b.end && a.end>=b.start;
 }
 
 // First-fit bin-pack, preserving the incoming (Sheet) order so the board does
