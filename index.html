@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Pilot Planner v4.06 — THC H125</title>
+<title>Pilot Planner v4.07 — THC H125</title>
 <style>
 :root {
   --bg: #0f1123;
@@ -199,7 +199,6 @@ body.hide-mission-assign .abar { display:none!important; }
 /* Dual-rated pilots: hidden until the Dual Rated toggle is on */
 body:not(.show-dual-rated) .p-row.dual-rated,
 body:not(.show-dual-rated) .dual-rated-header { display:none; }
-.dual-badge { font-size:8px; font-weight:700; color:var(--accent); margin-left:4px; opacity:.85; white-space:nowrap; flex-shrink:0; }
 /* Per-row hide: rows checked off are hidden unless Show Hidden is on */
 .row-hide-cb { width:11px; height:11px; flex-shrink:0; cursor:pointer; margin:0 1px 0 0; opacity:.45; }
 .row-hide-cb:hover { opacity:1; }
@@ -335,7 +334,7 @@ body.has-pilot-focus .p-row.pilot-focused .pname { font-weight:700; color:var(--
   <div class="leg"><input type="color" id="cc-proposedOn" style="width:14px;height:14px;border:none;padding:0;cursor:pointer;border-radius:2px" onchange="ROT_COLORS.proposedOn=this.value;saveRotColors();render()"> Proposed On</div>
   <div class="leg"><input type="color" id="cc-proposedOff" style="width:14px;height:14px;border:none;padding:0;cursor:pointer;border-radius:2px" onchange="ROT_COLORS.proposedOff=this.value;saveRotColors();render()"> Proposed Off</div>
   <div class="leg"><div class="lsw" style="background:var(--yellow)"></div> Cursor</div>
-  <span id="app-version" style="font-size:10px;opacity:.5;cursor:pointer;margin-left:4px;user-select:none">v4.06</span>
+  <span id="app-version" style="font-size:10px;opacity:.5;cursor:pointer;margin-left:4px;user-select:none">v4.07</span>
   <span id="legend-hint" style="margin-left:auto;font-size:10px">Add a note about 'Vacation' or 'Pilot Added' with the + Add Rotation button.</span>
 </div>
 
@@ -2477,8 +2476,7 @@ function pilotRow(p,td,ds){
   const safePN=p.name.replace(/'/g,"\\'");
   const rowCls=`row p-row${p.dualRated?' dual-rated':''}${HIDDEN_PILOTS.has(p.name)?' pilot-hidden':''}`;
   const hideCb=`<input type="checkbox" class="row-hide-cb" ${HIDDEN_PILOTS.has(p.name)?'checked':''} onclick="event.stopPropagation();toggleHidePilot('${safePN}',this)" title="Hide this row">`;
-  const dualBadge=p.dualRated?`<span class="dual-badge" title="Dual rated pilot">(Dual Rated)</span>`:'';
-  return `<div class="${rowCls}" draggable="true" data-pilot="${p.name}" data-group="${g}"><div class="rlabel" style="${labelStyle}">${hideCb}<span class="pname" onclick="togglePilotFocus('${safePN}')" title="Click to focus this pilot's row">${p.name}</span>${dualBadge}<span class="rot-add-btn" onclick="event.stopPropagation();showAddRotPop(event,'${safePN}')" title="Add rotation" style="cursor:pointer;font-size:13px;opacity:.6;margin-left:4px;flex-shrink:0">+</span></div><div class="rbars" style="width:${td*DW}px;height:21px">${bars}${daysOnLabel}</div></div>`;
+  return `<div class="${rowCls}" draggable="true" data-pilot="${p.name}" data-group="${g}"><div class="rlabel" style="${labelStyle}">${hideCb}<span class="pname" onclick="togglePilotFocus('${safePN}')" title="Click to focus this pilot's row">${p.name}</span><span class="rot-add-btn" onclick="event.stopPropagation();showAddRotPop(event,'${safePN}')" title="Add rotation" style="cursor:pointer;font-size:13px;opacity:.6;margin-left:4px;flex-shrink:0">+</span></div><div class="rbars" style="width:${td*DW}px;height:21px">${bars}${daysOnLabel}</div></div>`;
 }
 
 // ====== ROTATION CLICK/EDIT POPOVER ======
