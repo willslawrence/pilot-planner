@@ -176,8 +176,9 @@ function doPost(e) {
  if (!sheet) return jsonResponse({error: 'Sheet not found: ' + sheetName});
 
  const body = JSON.parse(e.postData.contents);
- const rows = body.rows;
+ let rows = body.rows;
  if (!rows || !rows.length) return jsonResponse({error: 'No rows provided'});
+ if (sheetName === 'Pilots') rows = mergePilotRows_(sheet, rows);
  const headers = sheet.getRange(1, 1, 1, sheet.getLastColumn()).getValues()[0];
  sheet.getRange(2, 1, Math.max(sheet.getLastRow() - 1, 1), sheet.getLastColumn()).clearContent();
  if (rows.length > 0) {
@@ -236,10 +237,11 @@ function handleCommitAll(ss, body) {
  };
  let total = 0;
  for (const tab in writes) {
- const rows = writes[tab];
+ let rows = writes[tab];
  if (!rows || !rows.length) continue;
  const sheet = ss.getSheetByName(tab);
  if (!sheet) continue;
+ if (tab === 'Pilots') rows = mergePilotRows_(sheet, rows);
  const last = sheet.getLastRow();
  if (last > 1) sheet.getRange(2, 1, last - 1, sheet.getMaxColumns()).clearContent();
  sheet.getRange(2, 1, rows.length, rows[0].length).setValues(rows);
@@ -259,6 +261,44 @@ function handleCommitAll(ss, body) {
  } finally {
  lock.releaseLock();
  }
+}
+
+// --- Pilots tab: a save may ADD pilot details, never erase them ---
+// Category, Management, FleetplanID, PairGroup and Part121 are owned by the Sheet —
+// the planner has no UI to change them, it only echoes back what it loaded. A page
+// that loaded from its local cache (API down) knows pilot NAMES only, and its save
+// blanked every one of those columns for all 24 pilots (found 2026-09-14). So:
+//  - an incoming blank/FALSE never replaces a filled cell
+//  - a pilot the page didn't send is kept, never dropped
+// To clear a value, edit the Sheet directly.
+function mergePilotRows_(sheet, incoming) {
+ const lastCol = sheet.getLastColumn();
+ const last = sheet.getLastRow();
+ const existing = last > 1 ? sheet.getRange(2, 1, last - 1, lastCol).getValues() : [];
+ const key = function(v) { return String(v || '').trim().toLowerCase(); };
+ const isBlank = function(v) { return v === '' || v === null || v === false || String(v).toUpperCase() === 'FALSE'; };
+ const width = Math.max(lastCol, incoming[0].length);
+ const byName = {};
+ existing.forEach(function(r) { if (key(r[0])) byName[key(r[0])] = r; });
+ const seen = {};
+ const out = incoming.map(function(row) {
+ seen[key(row[0])] = true;
+ const old = byName[key(row[0])] || [];
+ const merged = [];
+ for (let i = 0; i < width; i++) {
+ const v = i < row.length ? row[i] : '';
+ const o = i < old.length ? old[i] : '';
+ merged.push(isBlank(v) && !isBlank(o) ? o : v);
+ }
+ return merged;
+ });
+ existing.forEach(function(r) {
+ if (!key(r[0]) || seen[key(r[0])]) return;
+ const kept = r.slice();
+ while (kept.length < width) kept.push('');
+ out.push(kept);
+ });
+ return out;
 }
 
 function jsonResponse(data) {
