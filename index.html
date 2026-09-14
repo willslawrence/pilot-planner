@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Pilot Planner v4.07 — THC H125</title>
+<title>Pilot Planner v4.08 — THC H125</title>
 <style>
 :root {
   --bg: #0f1123;
@@ -196,9 +196,9 @@ body.hide-all-missions .sec-row { display:none; }
 .admin-only-toggle { display:none; }
 body:not(.viewer-mode) .admin-only-toggle { display:flex; }
 body.hide-mission-assign .abar { display:none!important; }
-/* Dual-rated pilots: hidden until the Dual Rated toggle is on */
-body:not(.show-dual-rated) .p-row.dual-rated,
-body:not(.show-dual-rated) .dual-rated-header { display:none; }
+/* Part 121 pilots (shared with P135): hidden until the Part 121 toggle is on */
+body:not(.show-p121) .p-row.p121,
+body:not(.show-p121) .p121-header { display:none; }
 /* Per-row hide: rows checked off are hidden unless Show Hidden is on */
 .row-hide-cb { width:11px; height:11px; flex-shrink:0; cursor:pointer; margin:0 1px 0 0; opacity:.45; }
 .row-hide-cb:hover { opacity:1; }
@@ -290,7 +290,7 @@ body.has-pilot-focus .p-row.pilot-focused .pname { font-weight:700; color:var(--
     <label class="toggle" title="Toggle pilot-added rotation bars"><input type="checkbox" id="availToggle" onchange="toggleAvailable()"><span class="toggle-slider"></span><span class="toggle-lbl">Pilot Added</span></label>
     <label class="toggle admin-only-toggle" title="Toggle proposed (not yet agreed) rotation bars"><input type="checkbox" id="propToggle" checked onchange="toggleProposed()"><span class="toggle-slider"></span><span class="toggle-lbl">Proposed</span></label>
     <label class="toggle admin-only-toggle" title="Show mission rows"><input type="checkbox" id="missionsToggle" checked onchange="toggleMissions()"><span class="toggle-slider"></span><span class="toggle-lbl">Missions</span></label>
-    <label class="toggle" title="Show dual-rated pilots (hidden by default)"><input type="checkbox" id="dualRatedToggle" onchange="toggleDualRated()"><span class="toggle-slider"></span><span class="toggle-lbl">Dual Rated</span></label>
+    <label class="toggle" title="Show Part 121 pilots shared with Part 135 (hidden by default)"><input type="checkbox" id="p121Toggle" onchange="toggleP121()"><span class="toggle-slider"></span><span class="toggle-lbl">Part 121</span></label>
     <label class="toggle admin-only-toggle" title="Reveal pilot rows you've individually hidden so you can restore them"><input type="checkbox" id="showHiddenToggle" onchange="toggleShowHidden()"><span class="toggle-slider"></span><span class="toggle-lbl">Show Hidden</span></label>
     <label class="toggle" title="Show each pilot's Part 135 base month"><input type="checkbox" id="baseMonthToggle" onchange="toggleBaseMonth()"><span class="toggle-slider"></span><span class="toggle-lbl">Base Month</span></label>
   </div>
@@ -319,11 +319,11 @@ body.has-pilot-focus .p-row.pilot-focused .pname { font-weight:700; color:var(--
 </div>
 
 <div class="legend">
-  <div class="leg"><input type="color" id="cc-uam" style="width:14px;height:14px;border:none;padding:0;cursor:pointer;border-radius:2px" onchange="PILOT_COLORS.uam=this.value;savePilotColors();render()"> UAM</div>
-  <div class="leg"><input type="color" id="cc-both" style="width:14px;height:14px;border:none;padding:0;cursor:pointer;border-radius:2px" onchange="PILOT_COLORS.both=this.value;savePilotColors();render()"> UAM + Survey</div>
-  <div class="leg"><input type="color" id="cc-survey" style="width:14px;height:14px;border:none;padding:0;cursor:pointer;border-radius:2px" onchange="PILOT_COLORS.survey=this.value;savePilotColors();render()"> Survey</div>
-  <div class="leg"><input type="color" id="cc-mg" style="width:14px;height:14px;border:none;padding:0;cursor:pointer;border-radius:2px" onchange="PILOT_COLORS.mg=this.value;savePilotColors();render()"> Management</div>
-  <div class="leg"><input type="color" id="cc-temp" style="width:14px;height:14px;border:none;padding:0;cursor:pointer;border-radius:2px" onchange="PILOT_COLORS.temp=this.value;savePilotColors();render()"> Temp</div>
+  <div class="leg"><div class="lsw" data-pilot-cat="uam"></div> UAM</div>
+  <div class="leg"><div class="lsw" data-pilot-cat="survey"></div> Survey</div>
+  <div class="leg"><div class="lsw" data-pilot-cat="mg"></div> Management</div>
+  <div class="leg"><div class="lsw" data-pilot-cat="p121"></div> Part 121</div>
+  <div class="leg"><div class="lsw" data-pilot-cat="temp"></div> Temp</div>
   <div class="leg"><div class="lsw" style="background:var(--red)"></div> Rally</div>
   <div class="leg"><input type="color" id="cc-on" style="width:14px;height:14px;border:none;padding:0;cursor:pointer;border-radius:2px" onchange="ROT_COLORS.on=this.value;saveRotColors();render()"> On</div>
   <div class="leg"><input type="color" id="cc-off" style="width:14px;height:14px;border:none;padding:0;cursor:pointer;border-radius:2px" onchange="ROT_COLORS.off=this.value;saveRotColors();render()"> Off</div>
@@ -334,7 +334,7 @@ body.has-pilot-focus .p-row.pilot-focused .pname { font-weight:700; color:var(--
   <div class="leg"><input type="color" id="cc-proposedOn" style="width:14px;height:14px;border:none;padding:0;cursor:pointer;border-radius:2px" onchange="ROT_COLORS.proposedOn=this.value;saveRotColors();render()"> Proposed On</div>
   <div class="leg"><input type="color" id="cc-proposedOff" style="width:14px;height:14px;border:none;padding:0;cursor:pointer;border-radius:2px" onchange="ROT_COLORS.proposedOff=this.value;saveRotColors();render()"> Proposed Off</div>
   <div class="leg"><div class="lsw" style="background:var(--yellow)"></div> Cursor</div>
-  <span id="app-version" style="font-size:10px;opacity:.5;cursor:pointer;margin-left:4px;user-select:none">v4.07</span>
+  <span id="app-version" style="font-size:10px;opacity:.5;cursor:pointer;margin-left:4px;user-select:none">v4.08</span>
   <span id="legend-hint" style="margin-left:auto;font-size:10px">Add a note about 'Vacation' or 'Pilot Added' with the + Add Rotation button.</span>
 </div>
 
@@ -387,6 +387,7 @@ let ORIGINAL_MISSIONS_LOADED = []; // Immutable copy of missions as loaded from 
 let ORIGINAL_ROTATIONS = ''; // Store original rotation state for dirty checking
 let lastCommitTime = null;
 let SHEET_REV = null; // Sheet revision at load time — stale-page guard (commitAll rejects if the Sheet moved on)
+let LOADED_FROM_CACHE = false; // true when the API was unreachable and the page shows localStorage data — Commit is refused
 let isDirty = false;
 
 // --- Freshness watch: auto-refresh when the Sheet moves on ---
@@ -548,9 +549,9 @@ function toggleMissions(){
   document.body.classList.toggle('hide-all-missions',!cb.checked);
 }
 
-function toggleDualRated(){
-  const cb=document.getElementById('dualRatedToggle');
-  document.body.classList.toggle('show-dual-rated',cb.checked);
+function toggleP121(){
+  const cb=document.getElementById('p121Toggle');
+  document.body.classList.toggle('show-p121',cb.checked);
 }
 
 function toggleShowHidden(){
@@ -836,14 +837,16 @@ async function fetchFromAPI() {
       // owns it and sync_obsidian_pilots.py writes Pilots!BaseMonth. Blank is normal
       // for a pilot who has not had a competency check yet.
       baseMonth: pilot.BaseMonth || '',
-      // Coerce exactly like Temp/DualRated below. Read RAW this was a live data-loss bug:
+      // Coerce exactly like Temp/Part121 below. Read RAW this was a live data-loss bug:
       // a cell holding the TEXT "FALSE" is a non-empty string -> truthy -> the pilot is
       // treated as management, their roster is collapsed to one ON block, and the next
       // commit writes that collapse back over their real blocks. (Dermot Fahy, 2026-08-23.)
       management: pilot.Management === true || pilot.Management === 'TRUE',
       mg: (pilot.Management === true || pilot.Management === 'TRUE') ? 1 : 0,
       temp: pilot.Temp === true || pilot.Temp === 'TRUE',
-      dualRated: pilot.DualRated === true || pilot.DualRated === 'TRUE' || pilot.DualRated === 'Yes',
+      // Part 121 pilots shared with P135 — their own toggle-hidden section. The column was
+      // `DualRated` until v4.08; the old name is still read so the section survives the rename.
+      p121: [pilot.Part121, pilot.DualRated].some(v => v === true || v === 'TRUE' || v === 'Yes'),
       rot: [], // Will be populated from rotations data
       ev: [] // Events - keep empty for now
     }));
@@ -942,6 +945,10 @@ async function fetchFromAPI() {
 
     // Store original state for dirty checking
     ORIGINAL_ASSIGNMENTS = JSON.parse(JSON.stringify(apiAssignments));
+    LOADED_FROM_CACHE = false;
+    // Cache every pilot's details (not just names), so a page that later has to fall back
+    // to localStorage still colours and sections pilots correctly.
+    try { localStorage.setItem('pp_pilots', JSON.stringify(PILOTS.map(({rot, ev, ...meta}) => meta))); } catch (e) {}
     ORIGINAL_MISSIONS = JSON.parse(JSON.stringify(MISSIONS));
     ORIGINAL_MISSIONS_LOADED = JSON.parse(JSON.stringify(MISSIONS)); // Immutable — never updated by local edits
     ORIGINAL_ROTATIONS = JSON.stringify(PILOTS.map(p=>({n:p.name,rot:p.rot})));
@@ -1025,7 +1032,7 @@ async function commitToAPI() {
       p.management ? 'TRUE' : 'FALSE',
       p.displayName || p.name,
       p.temp ? 'TRUE' : 'FALSE',
-      p.dualRated ? 'TRUE' : '',
+      p.p121 ? 'TRUE' : '',          // Part121 (column H)
       p.baseMonth || ''
     ]);
 
@@ -1041,8 +1048,7 @@ async function commitToAPI() {
     // --- Atomic commit with stale-page guard ---
     // One POST writes all tabs; the Apps Script rejects it if the Sheet's revision
     // moved since this page loaded (someone else committed) — so a stale page can
-    // never overwrite newer commits. Falls back to the legacy per-tab writes
-    // (no guard) if the Apps Script hasn't been updated with commitAll yet.
+    // never overwrite newer commits. There is deliberately NO fallback (see below).
     let result = { success: true, rowsWritten: 0 };
     let committedAtomic = false;
     try {
@@ -1073,52 +1079,14 @@ async function commitToAPI() {
         }
       }
     } catch (e) {
-      console.warn('commitAll unavailable — falling back to legacy per-tab writes:', e);
+      console.warn('commitAll failed:', e);
     }
 
     if (!committedAtomic) {
-      // Legacy path (pre-commitAll Apps Script): four per-tab replace writes, no stale guard.
-      if (rows.length > 0) {
-        const response = await fetch(`${BASE_URL}?action=write&sheet=Assignments`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'text/plain' },
-          body: JSON.stringify({ rows }),
-          redirect: 'follow'
-        });
-        if (!response.ok) throw new Error(`HTTP ${response.status}`);
-        result = await response.json();
-        if (!result.success) throw new Error('Assignments write failed');
-      }
-      const mResp = await fetch(`${BASE_URL}?action=write&sheet=Missions`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'text/plain' },
-        body: JSON.stringify({ rows: missionRows }),
-        redirect: 'follow'
-      });
-      if (mResp.ok) {
-        const mResult = await mResp.json();
-        if (!mResult.success) console.warn('Mission write failed:', mResult);
-      }
-      const rResp = await fetch(`${BASE_URL}?action=write&sheet=Rotations`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'text/plain' },
-        body: JSON.stringify({ rows: rotRows }),
-        redirect: 'follow'
-      });
-      if (rResp.ok) {
-        const rResult = await rResp.json();
-        if (!rResult.success) console.warn('Rotation write failed:', rResult);
-      }
-      const pResp = await fetch(`${BASE_URL}?action=write&sheet=Pilots`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'text/plain' },
-        body: JSON.stringify({ rows: pilotRows }),
-        redirect: 'follow'
-      });
-      if (pResp.ok) {
-        const pResult = await pResp.json();
-        if (!pResult.success) console.warn('Pilots write failed:', pResult);
-      }
+      // No fallback. The old per-tab writes had no stale-page guard, and a page running on
+      // cached data reached them and blanked every pilot's Category, Management and
+      // FleetplanID (found 2026-09-14). A save that can't take the guarded path doesn't happen.
+      throw new Error('Google Sheets did not accept the save — nothing was written. Reload and try again.');
     }
 
     // Update original state and clear dirty flag
@@ -1389,6 +1357,10 @@ function hideSaving(success){
 
 // ====== BUTTON HANDLERS ======
 async function commitChanges() {
+  if (LOADED_FROM_CACHE || SHEET_REV === null) {
+    showMessage('⚠️ Read-only: this page is showing cached data because Google Sheets was unreachable. Reload when the connection is back — nothing was saved.', 'error');
+    return;
+  }
   if (!isDirty) {
     showMessage('No changes to commit', 'warning');
     return;
@@ -1431,8 +1403,9 @@ async function resetFromAPI() {
     if (savedAssignments) {
       try {
         asgn = JSON.parse(savedAssignments);
+        LOADED_FROM_CACHE = true;
         render();
-        showMessage('Loaded from local cache instead', 'info');
+        showMessage('Loaded from local cache instead — read-only until you reload', 'info');
       } catch (e) {
         showMessage('Both API and cache failed!', 'error');
       }
@@ -1555,10 +1528,15 @@ function isOn(p,ds){for(const r of p.rot)if(ds>=r.s&&ds<=r.e&&(r.st==='ON'||r.st
 function isVacExtra(p,ds){for(const r of p.rot)if(ds>=r.s&&ds<=r.e&&r.st==='VACATION_EXTRA')return true;return false;}
 function isTraining(p,ds){for(const r of p.rot)if(ds>=r.s&&ds<=r.e&&r.st==='TRAINING')return true;return false;}
 function getRotStatus(p,ds){for(const r of p.rot)if(ds>=r.s&&ds<=r.e)return r.st;return 'OFF';}
-function pg(p){if(p.temp) return 'temp';if(p.mg) return 'mg';const cats=p.quals.join(' ');const u=cats.includes('UAM'),s=cats.includes('Survey');return u&&s?'both':u?'uam':'survey';}
-const PILOT_COLORS=JSON.parse(localStorage.getItem('pp_pilotColors')||'null')||{uam:'#87CEEB',both:'#1a3a6b',survey:'#FF8C00',mg:'#9CA3AF',temp:'#AB47BC'};
-function gc(g){return PILOT_COLORS[g]||'#888';}
-function savePilotColors(){localStorage.setItem('pp_pilotColors',JSON.stringify(PILOT_COLORS));}
+// Pilot colour = category. Fixed in code (v4.08) so every browser shows the same thing —
+// the old per-browser colour pickers let two screens disagree. Set in the Sheet:
+// Management → grey, Part121 → green, Category "Survey" → orange, "UAM" → blue.
+// A pilot with no category is a data gap and renders neutral — NEVER as Survey, which is
+// how a blanked Category column once turned the whole roster orange (2026-09-14).
+function pg(p){if(p.mg||p.management) return 'mg';if(p.p121) return 'p121';if(p.temp) return 'temp';const q=(p.quals||[]).join(' ');return q.includes('Survey')?'survey':q.includes('UAM')?'uam':'none';}
+const PILOT_COLORS={uam:'#87CEEB',survey:'#FF8C00',mg:'#9CA3AF',p121:'#43A047',temp:'#AB47BC',none:'#5B6170'};
+try{localStorage.removeItem('pp_pilotColors');}catch(e){}
+function gc(g){return PILOT_COLORS[g]||PILOT_COLORS.none;}
 // Defaults are SPREAD UNDER the stored object so that adding a new colour key ships a
 // working default to users who already have pp_rotColors in localStorage. Without the
 // spread, every existing browser renders the new bars as `undefined` -> transparent.
@@ -1852,7 +1830,7 @@ function render(){
   html+=weekOverlays(td);
   html+=monthOverlays(td, months);
 
-  const dualP=PILOTS.filter(p=>p.dualRated);
+  const p121P=PILOTS.filter(p=>p.p121);
 
   // Missions by type
   const uam=MISSIONS.filter(m=>m.type==='UAM'), surv=MISSIONS.filter(m=>m.type==='Survey'), trn=MISSIONS.filter(m=>m.type==='Training'), rally=MISSIONS.filter(m=>m.type==='Rally'||m.type==='Ad Hoc');
@@ -1876,17 +1854,18 @@ function render(){
   const spacer=`<div style="height:7px;background:rgba(255,255,255,.03)"></div>`;
   let prevPg=null;
   for(const p of PILOTS){
-    if(p.dualRated) continue;   // dual-rated render in their own toggle-hidden section below
+    if(p.p121) continue;   // Part 121 pilots render in their own toggle-hidden section below
     const k=(p.pairGroup||'').toString().trim();
     if(prevPg!==null && k!==prevPg) html+=spacer;   // gap between distinct PairGroups
     html+=pilotRow(p,td,ds); listed.add(p.name);
     prevPg=k;
   }
   html+=spacer;
-  // Dual-rated pilots — rendered dynamically from sheet data, hidden until the Dual Rated toggle is on
-  if(dualP.length){
-    html+=`<div class="row dual-rated-header" style="min-height:7px;"><div class="rlabel" style="font-size:8px;font-weight:700;color:var(--accent);opacity:.8;padding:0 6px;display:flex;align-items:center">Dual Rated</div><div class="rbars" style="width:${td*DW}px;border-bottom:1px solid var(--accent)"></div></div>`;
-    for(const p of dualP){html+=pilotRow(p,td,ds);listed.add(p.name);}
+  // Part 121 pilots shared with P135 — from the Sheet's Part121 column, hidden until the toggle is on.
+  // A real section heading: the old 8px "Dual Rated" label was invisible once the per-name badge went (v4.07).
+  if(p121P.length){
+    html+=`<div class="row p121-header" style="min-height:20px"><div class="rlabel" style="font-size:10px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:${PILOT_COLORS.p121};padding:0 6px;display:flex;align-items:center">Part 121 Pilots</div><div class="rbars" style="width:${td*DW}px;border-top:2px solid ${PILOT_COLORS.p121}"></div></div>`;
+    for(const p of p121P){html+=pilotRow(p,td,ds);listed.add(p.name);}
   }
   html+=`<div class="row" style="min-height:22px"><div class="rlabel"><span class="add-btn" onclick="showAddPilotPop(event)">+ Add Pilot</span></div><div class="rbars" style="width:${td*DW}px"></div></div>`;
 
@@ -1933,10 +1912,7 @@ function render(){
 
   document.getElementById('mpanel').innerHTML=html;
   const dpEl=document.getElementById('dp');if(dpEl)dpEl.value=ds;
-  const ccu=document.getElementById('cc-uam'),ccb=document.getElementById('cc-both'),ccs=document.getElementById('cc-survey');
-  if(ccu)ccu.value=PILOT_COLORS.uam;if(ccb)ccb.value=PILOT_COLORS.both;if(ccs)ccs.value=PILOT_COLORS.survey;
-  const ccm=document.getElementById('cc-mg');if(ccm)ccm.value=PILOT_COLORS.mg||'#9CA3AF';
-  const ccTemp=document.getElementById('cc-temp');if(ccTemp)ccTemp.value=PILOT_COLORS.temp||'#AB47BC';
+  document.querySelectorAll('[data-pilot-cat]').forEach(el=>{el.style.background=gc(el.dataset.pilotCat);});
   const ccPOn=document.getElementById('cc-proposedOn');if(ccPOn)ccPOn.value=ROT_COLORS.proposedOn;
   const ccPOff=document.getElementById('cc-proposedOff');if(ccPOff)ccPOff.value=ROT_COLORS.proposedOff;
   const ccOn=document.getElementById('cc-on');if(ccOn)ccOn.value=ROT_COLORS.on;
@@ -2474,7 +2450,7 @@ function pilotRow(p,td,ds){
   // pilots are already distinguished by the muted catColor text + --surface fill.
   const labelStyle=on?`background:${ROT_COLORS.on};border-left:3px solid ${ROT_COLORS.on};color:#fff;font-weight:700`:`background:var(--surface);border-left:3px solid ${catColor};color:${catColor};font-weight:400`;
   const safePN=p.name.replace(/'/g,"\\'");
-  const rowCls=`row p-row${p.dualRated?' dual-rated':''}${HIDDEN_PILOTS.has(p.name)?' pilot-hidden':''}`;
+  const rowCls=`row p-row${p.p121?' p121':''}${HIDDEN_PILOTS.has(p.name)?' pilot-hidden':''}`;
   const hideCb=`<input type="checkbox" class="row-hide-cb" ${HIDDEN_PILOTS.has(p.name)?'checked':''} onclick="event.stopPropagation();toggleHidePilot('${safePN}',this)" title="Hide this row">`;
   return `<div class="${rowCls}" draggable="true" data-pilot="${p.name}" data-group="${g}"><div class="rlabel" style="${labelStyle}">${hideCb}<span class="pname" onclick="togglePilotFocus('${safePN}')" title="Click to focus this pilot's row">${p.name}</span><span class="rot-add-btn" onclick="event.stopPropagation();showAddRotPop(event,'${safePN}')" title="Add rotation" style="cursor:pointer;font-size:13px;opacity:.6;margin-left:4px;flex-shrink:0">+</span></div><div class="rbars" style="width:${td*DW}px;height:21px">${bars}${daysOnLabel}</div></div>`;
 }
@@ -3479,6 +3455,7 @@ async function initApp() {
     updateDirtyState();
   } catch (error) {
     console.error('Failed to load from API, trying localStorage:', error);
+    LOADED_FROM_CACHE = true; // read-only: see commitChanges
     
     // Fallback to localStorage
     const savedAssignments = localStorage.getItem('pp_asgn');
@@ -3494,16 +3471,17 @@ async function initApp() {
         if (savedRots) {
           // Reconstruct basic pilots from rotations
           const rotMap = JSON.parse(savedRots);
-          PILOTS = Object.keys(rotMap).map(name => ({
+          let meta = {};
+          try { for (const m of JSON.parse(localStorage.getItem('pp_pilots') || '[]')) meta[m.name] = m; } catch (e) {}
+          PILOTS = Object.keys(rotMap).map(name => Object.assign({ quals: [] }, meta[name] || {}, {
             name,
-            quals: [],
             rot: rotMap[name],
             ev: []
           }));
         }
         
         updateNid();
-        showMessage('Loaded from local cache (API unavailable)', 'info');
+        showMessage('Loaded from local cache (API unavailable) — read-only until you reload', 'info');
       } catch (e) {
         // Final fallback - use empty state
         asgn = {};
