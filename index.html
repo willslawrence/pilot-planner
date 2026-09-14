@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Pilot Planner v4.08 — THC H125</title>
+<title>Pilot Planner v4.09 — THC H125</title>
 <style>
 :root {
   --bg: #0f1123;
@@ -334,7 +334,7 @@ body.has-pilot-focus .p-row.pilot-focused .pname { font-weight:700; color:var(--
   <div class="leg"><input type="color" id="cc-proposedOn" style="width:14px;height:14px;border:none;padding:0;cursor:pointer;border-radius:2px" onchange="ROT_COLORS.proposedOn=this.value;saveRotColors();render()"> Proposed On</div>
   <div class="leg"><input type="color" id="cc-proposedOff" style="width:14px;height:14px;border:none;padding:0;cursor:pointer;border-radius:2px" onchange="ROT_COLORS.proposedOff=this.value;saveRotColors();render()"> Proposed Off</div>
   <div class="leg"><div class="lsw" style="background:var(--yellow)"></div> Cursor</div>
-  <span id="app-version" style="font-size:10px;opacity:.5;cursor:pointer;margin-left:4px;user-select:none">v4.08</span>
+  <span id="app-version" style="font-size:10px;opacity:.5;cursor:pointer;margin-left:4px;user-select:none">v4.09</span>
   <span id="legend-hint" style="margin-left:auto;font-size:10px">Add a note about 'Vacation' or 'Pilot Added' with the + Add Rotation button.</span>
 </div>
 
@@ -1852,10 +1852,18 @@ function render(){
   // is inserted whenever the PairGroup changes. Reorder/pair anyone by moving
   // rows or setting PairGroup in the Sheet — no code change, no category headers.
   const spacer=`<div style="height:7px;background:rgba(255,255,255,.03)"></div>`;
+  // Pilots sharing a PairGroup render together even when their Sheet rows aren't adjacent —
+  // the group sits where its first member is. (v4.09: pairs 9 and 10 were split by row order.)
+  const pgKey=p=>(p.pairGroup||'').toString().trim();
+  const mainP=PILOTS.filter(p=>!p.p121), ordered=[], placed=new Set();   // Part 121 pilots render in their own section below
+  for(const p of mainP){
+    if(placed.has(p)) continue;
+    const grp=pgKey(p)?mainP.filter(q=>pgKey(q)===pgKey(p)):[p];
+    for(const q of grp){placed.add(q);ordered.push(q);}
+  }
   let prevPg=null;
-  for(const p of PILOTS){
-    if(p.p121) continue;   // Part 121 pilots render in their own toggle-hidden section below
-    const k=(p.pairGroup||'').toString().trim();
+  for(const p of ordered){
+    const k=pgKey(p);
     if(prevPg!==null && k!==prevPg) html+=spacer;   // gap between distinct PairGroups
     html+=pilotRow(p,td,ds); listed.add(p.name);
     prevPg=k;
