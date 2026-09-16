@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Pilot Planner v4.09 — THC H125</title>
+<title>Pilot Planner v4.10 — THC H125</title>
 <style>
 :root {
   --bg: #0f1123;
@@ -101,7 +101,7 @@ html.light .h-row { background:#fff; }
 body.viewer-mode .abar:hover .ax { display:none; }
 .sim-banner { display:none; background:linear-gradient(90deg,#009688,#00796B); color:#fff; text-align:center; font-size:11px; font-weight:600; padding:3px 0; letter-spacing:.5px; }
 body.simulate-mode .sim-banner { display:block; }
-#simBtn.active { background:none; color:#fff; border-color:transparent; opacity:1!important; filter:drop-shadow(0 0 6px var(--teal)); }
+#simBtn.active { background:var(--teal); border-color:var(--teal); color:#fff; }
 .abar-grip { position:absolute; top:0; bottom:0; width:6px; cursor:ew-resize; z-index:4; }
 .abar-grip-l { left:-2px; border-radius:4px 0 0 4px; }
 .abar-grip-r { right:-2px; border-radius:0 4px 4px 0; }
@@ -297,6 +297,7 @@ body.has-pilot-focus .p-row.pilot-focused .pname { font-weight:700; color:var(--
   <div class="ctrls">
     <button onclick="showWorkoverPop(event)" title="Add a rotation for a pilot" id="addRotBtn">+ Work Over</button>
     <button id="chgBtn" onclick="toggleChangePanel()" title="Recent roster changes">🔔 Changes<span id="chgBadge"></span></button>
+    <button id="simBtn" onclick="toggleSimulate()" title="Plan ahead: see the full roster beyond the 45-day window and drag pilots to test coverage. Nothing is saved.">🎮 Simulate</button>
     <button onclick="window.open('https://willslawrence.github.io/thc-fleet-map-v2/','_blank')" title="Open Fleet Map">🗺️ Fleet Map</button>
     <button id="commitBtn" onclick="commitChanges()" title="Save changes to Google Sheets" style="position:relative;">💾 Commit</button>
     <button onclick="resetFromAPI()" title="Reload from Google Sheets and discard uncommitted changes">🗑️ Reset</button>
@@ -334,7 +335,7 @@ body.has-pilot-focus .p-row.pilot-focused .pname { font-weight:700; color:var(--
   <div class="leg"><input type="color" id="cc-proposedOn" style="width:14px;height:14px;border:none;padding:0;cursor:pointer;border-radius:2px" onchange="ROT_COLORS.proposedOn=this.value;saveRotColors();render()"> Proposed On</div>
   <div class="leg"><input type="color" id="cc-proposedOff" style="width:14px;height:14px;border:none;padding:0;cursor:pointer;border-radius:2px" onchange="ROT_COLORS.proposedOff=this.value;saveRotColors();render()"> Proposed Off</div>
   <div class="leg"><div class="lsw" style="background:var(--yellow)"></div> Cursor</div>
-  <span id="app-version" style="font-size:10px;opacity:.5;cursor:pointer;margin-left:4px;user-select:none">v4.09</span>
+  <span id="app-version" style="font-size:10px;opacity:.5;cursor:pointer;margin-left:4px;user-select:none">v4.10</span>
   <span id="legend-hint" style="margin-left:auto;font-size:10px">Add a note about 'Vacation' or 'Pilot Added' with the + Add Rotation button.</span>
 </div>
 
@@ -426,9 +427,10 @@ setInterval(checkFreshness, 30 * 60 * 1000);
 
 // ====== ADMIN MODE ======
 let adminMode = false;
-// Simulation mode has no header button any more (removed 2026-08-26 — it was noise
-// for the people who actually read this board). The mode itself is intact and still
-// reachable at ?mode=simulate; every toggle site uses optional chaining on #simBtn.
+// Simulate mode is how Crew Planning & Scheduling see the roster beyond the 45-day
+// coverage window without being given admin. The header button was removed 2026-08-26
+// as "noise" and restored 2026-09-16 — it is their entry point, not a developer toy.
+// Also reachable at ?mode=simulate; toggle sites keep optional chaining on #simBtn.
 let simulateMode = false;
 function canEditAssignments(){ return adminMode || simulateMode; }
 // "Viewer mode" = neither admin nor simulate. The 45-day coverage filter
