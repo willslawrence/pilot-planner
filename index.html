@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Pilot Planner v4.11 — THC H125</title>
+<title>Pilot Planner v4.12 — THC H125</title>
 <style>
 :root {
   --bg: #0f1123;
@@ -334,7 +334,7 @@ body.has-pilot-focus .p-row.pilot-focused .pname { font-weight:700; color:var(--
   <div class="leg"><input type="color" id="cc-proposedOn" style="width:14px;height:14px;border:none;padding:0;cursor:pointer;border-radius:2px" onchange="ROT_COLORS.proposedOn=this.value;saveRotColors();render()"> Proposed On</div>
   <div class="leg"><input type="color" id="cc-proposedOff" style="width:14px;height:14px;border:none;padding:0;cursor:pointer;border-radius:2px" onchange="ROT_COLORS.proposedOff=this.value;saveRotColors();render()"> Proposed Off</div>
   <div class="leg"><div class="lsw" style="background:var(--yellow)"></div> Cursor</div>
-  <span id="app-version" style="font-size:10px;opacity:.5;cursor:pointer;margin-left:4px;user-select:none">v4.11</span>
+  <span id="app-version" style="font-size:10px;opacity:.5;cursor:pointer;margin-left:4px;user-select:none">v4.12</span>
   <span id="legend-hint" style="margin-left:auto;font-size:10px">Add a note about 'Vacation' or 'Pilot Added' with the + Add Rotation button.</span>
 </div>
 
@@ -414,9 +414,16 @@ async function checkFreshness() {
     } else if (!_staleBanner) {
       _staleBanner = document.createElement('div');
       _staleBanner.style.cssText = 'position:fixed;top:0;left:0;right:0;z-index:99999;background:#b26a00;color:#fff;font:600 13px/1.45 -apple-system,BlinkMacSystemFont,sans-serif;padding:9px 44px 9px 14px;text-align:center;box-shadow:0 2px 8px rgba(0,0,0,.3)';
-      _staleBanner.innerHTML = '⚠️ The Sheet has newer data than this page. Note your uncommitted edits, then refresh — committing now will be rejected and reload anyway.'
+      _staleBanner.innerHTML = '⚠️ The Sheet has newer data than this page. '
+        + '<button id="mergeNowBtn" style="font:600 11px -apple-system;padding:3px 10px;margin-left:6px;border-radius:4px;border:1px solid rgba(255,255,255,.55);background:rgba(255,255,255,.18);color:#fff;cursor:pointer">🔀 Merge now</button>'
+        + '<span style="opacity:.85;margin-left:8px">Your edits are kept — Commit merges automatically too.</span>'
         + '<span onclick="this.parentNode.remove();_staleBanner=null" style="position:absolute;right:14px;top:8px;cursor:pointer;font-size:16px">✕</span>';
       document.body.appendChild(_staleBanner);
+      _staleBanner.querySelector('#mergeNowBtn').onclick = async (ev) => {
+        ev.target.disabled = true; ev.target.textContent = 'Merging…';
+        try { await mergeWithSheet(); } catch (e) { showMessage('Merge failed: ' + e.message, 'error'); }
+        if (_staleBanner) { _staleBanner.remove(); _staleBanner = null; }
+      };
     }
   } catch (e) { /* offline / transient — ignore, next check will catch it */ }
 }
@@ -966,7 +973,318 @@ async function fetchFromAPI() {
   }
 }
 
-async function commitToAPI() {
+// ====== MERGE ON COMMIT (v4.12) ======
+// The problem this solves: the stale-page guard used to reject the WHOLE commit and
+// reload, so every edit made since the page loaded was lost and had to be remembered
+// and retyped. Rejecting was right (a stale clear-then-write once blanked 24 pilots);
+// throwing the work away was not.
+//
+// This is `git pull --rebase` for the planner. On a rejected commit we:
+//   1. derive MY changeset by diffing live state against the baseline this page loaded
+//   2. stash it to localStorage (so a crash mid-merge still can't eat it)
+//   3. reload fresh from the Sheet through the normal, trusted load path
+//   4. replay my changeset onto the fresh state
+//   5. commit again at the new revision
+// Anything that touches a different pilot / slot / mission than the other person
+// merges silently. Only a true overlap stops to ask.
+//
+// Granularity is deliberate, and mirrors how the data is actually owned:
+//   · rotations  — PER PILOT. A pilot's rot[] is one continuous timeline; merging two
+//                  people's block edits inside one pilot would invent a roster neither
+//                  of them wrote. Different pilots = clean merge, same pilot = conflict.
+//   · assignments— PER BLOCK, set semantics. A resize is a delete + an add, so two
+//                  people resizing the same block leaves two overlapping blocks in one
+//                  heli slot — that overlap IS the conflict signal.
+//   · missions   — COLOUR ONLY. It is the only mission field the planner owns; the
+//                  vault owns the rest. Replaying onto fresh data also fixes a quiet
+//                  old bug: the commit used to write missions back from the data this
+//                  page LOADED, reverting any Obsidian sync that landed in between.
+const PENDING_OPS_KEY = 'pp_pendingOps';
+const MERGE_MAX_ATTEMPTS = 3;
+
+const _mClone = o => JSON.parse(JSON.stringify(o));
+const _mEq = (a, b) => JSON.stringify(a) === JSON.stringify(b);
+// A block's identity is its whole value — pilot, dates and note. Two blocks that
+// differ in any field are different blocks, which is what makes a resize read as
+// delete-then-add and lets an unrelated edit in the same slot merge untouched.
+const _blockId = b => `${b.pilot}|${b.start}|${b.end}|${b.note || ''}`;
+const _overlaps = (a, b) => a.start <= b.end && b.start <= a.end;
+
+function _rotSummary(rot) {
+  if (!rot || !rot.length) return 'no rotation blocks';
+  return rot.slice(0, 4).map(r => `${r.st || 'OFF'} ${r.s}→${r.e}`).join(' · ')
+    + (rot.length > 4 ? ` · +${rot.length - 4} more` : '');
+}
+function _blockSummary(b) { return `${b.pilot} ${b.start}→${b.end}${b.note ? ' (' + b.note + ')' : ''}`; }
+function _missionName(id) {
+  const m = MISSIONS.find(x => String(x.id) === String(id));
+  return m ? m.name : `mission ${id}`;
+}
+
+// --- 1. Derive my changeset: live state vs the baseline this page loaded ---
+function computeMyOps() {
+  const ops = [];
+
+  // Assignments — set difference per heli slot.
+  const baseA = ORIGINAL_ASSIGNMENTS || {}, mineA = asgn || {};
+  for (const k of new Set([...Object.keys(baseA), ...Object.keys(mineA)])) {
+    const b = new Map((baseA[k] || []).map(x => [_blockId(x), x]));
+    const m = new Map((mineA[k] || []).map(x => [_blockId(x), x]));
+    for (const [id, x] of m) if (!b.has(id)) ops.push({ op: 'asgn-add', key: k, block: _mClone(x), mineSlot: [...m.keys()] });
+    for (const [id, x] of b) if (!m.has(id)) ops.push({ op: 'asgn-del', key: k, block: _mClone(x), mineSlot: [...m.keys()] });
+  }
+
+  // Rotations — whole-timeline replace, per pilot. A pilot present now but not in the
+  // baseline is one I added locally (a temp pilot), which is an add, not an edit.
+  const baseR = new Map(JSON.parse(ORIGINAL_ROTATIONS || '[]').map(r => [r.n, r.rot || []]));
+  for (const p of PILOTS) {
+    const mine = p.rot || [];
+    if (!baseR.has(p.name)) {
+      const { rot, ev, ...meta } = p;
+      ops.push({ op: 'pilot-add', name: p.name, meta: _mClone(meta), rot: _mClone(mine) });
+      continue;
+    }
+    const b = baseR.get(p.name);
+    if (!_mEq(b, mine)) ops.push({ op: 'rot-set', pilot: p.name, base: _mClone(b), mine: _mClone(mine) });
+  }
+
+  // Mission colours.
+  const baseM = new Map((ORIGINAL_MISSIONS_LOADED || []).map(m => [String(m.id), m.color]));
+  for (const m of MISSIONS) {
+    const b = baseM.get(String(m.id));
+    if (b !== undefined && b !== m.color) ops.push({ op: 'mission-color', id: String(m.id), base: b, mine: m.color });
+  }
+  return ops;
+}
+
+// --- 2. Replay my changeset onto whatever is on the Sheet now ---
+// Returns { applied, conflicts }. A conflict carries everything needed to apply
+// either side later, so the modal can just call _resolveConflict().
+function applyOps(ops) {
+  const conflicts = [];
+  let applied = 0;
+
+  for (const op of ops.filter(o => o.op !== 'asgn-add' && o.op !== 'asgn-del')) {
+    if (op.op === 'rot-set') {
+      const p = PILOTS.find(x => x.name === op.pilot);
+      if (!p) { conflicts.push({ op, what: op.pilot, why: 'no longer on the roster', mine: _rotSummary(op.mine), theirs: 'pilot removed from the Sheet' }); continue; }
+      const now = p.rot || [];
+      if (_mEq(now, op.mine)) continue;                      // they made the same change
+      if (_mEq(now, op.base)) { p.rot = _mClone(op.mine); applied++; continue; }  // untouched by them
+      conflicts.push({ op, what: op.pilot, why: 'their roster was changed on the Sheet too', mine: _rotSummary(op.mine), theirs: _rotSummary(now) });
+      continue;
+    }
+    if (op.op === 'mission-color') {
+      const m = MISSIONS.find(x => String(x.id) === String(op.id));
+      if (!m) continue;                                      // mission gone; nothing to colour
+      if (m.color === op.mine) continue;
+      if (m.color === op.base) { m.color = op.mine; applied++; continue; }
+      conflicts.push({ op, what: m.name + ' colour', why: 'recoloured on the Sheet too', mine: op.mine, theirs: m.color });
+      continue;
+    }
+    if (op.op === 'pilot-add') {
+      if (PILOTS.some(x => x.name === op.name)) continue;     // they added them too
+      PILOTS.push({ ...op.meta, rot: _mClone(op.rot), ev: [] });
+      applied++;
+    }
+  }
+
+  // Assignments: deletes first so my own resizes clear the way for my own adds.
+  // A resize is del(old) + add(new) on the same pilot, so both halves can trip over
+  // the same block on the Sheet. That is ONE decision for the user, not two — the
+  // add's clash check asks it properly (keep mine = drop theirs, insert mine), so the
+  // delete half stays quiet about any block its own add is already going to handle.
+  const addOps = ops.filter(o => o.op === 'asgn-add');
+  const _coveredByMyAdd = (key, x) =>
+    addOps.some(a => a.key === key && a.block.pilot === x.pilot && _overlaps(a.block, x));
+  for (const op of ops.filter(o => o.op === 'asgn-del')) {
+    const arr = asgn[op.key];
+    if (!arr) continue;
+    const i = arr.findIndex(x => _blockId(x) === _blockId(op.block));
+    if (i > -1) { arr.splice(i, 1); if (!arr.length) delete asgn[op.key]; applied++; continue; }
+    // The exact block is gone. Either they deleted it too (converged — say nothing),
+    // or they EDITED the thing I deleted. Silently keeping their edit would report a
+    // successful commit while the block I removed is still on the board, which is the
+    // failure this whole feature exists to stop. Ask.
+    const mineSlot = new Set(op.mineSlot || []);
+    const edited = arr.filter(x => x.pilot === op.block.pilot && _overlaps(x, op.block)
+      && !mineSlot.has(_blockId(x)) && !_coveredByMyAdd(op.key, x));
+    if (!edited.length) continue;                            // they deleted it as well
+    conflicts.push({
+      op, what: _missionName(op.key.split('_')[0]) + ' · heli ' + (Number(op.key.split('_')[1]) + 1),
+      why: 'you removed this block; it was edited on the Sheet instead',
+      mine: 'remove it — ' + _blockSummary(op.block),
+      theirs: 'keep it — ' + edited.map(_blockSummary).join(' · '),
+      clash: edited.map(_blockId)
+    });
+  }
+  for (const op of ops.filter(o => o.op === 'asgn-add')) {
+    if (!asgn[op.key]) asgn[op.key] = [];
+    const arr = asgn[op.key];
+    if (arr.some(x => _blockId(x) === _blockId(op.block))) continue;  // they added the same block
+    const mineSlot = new Set(op.mineSlot || []);
+    const clash = arr.filter(x => _overlaps(x, op.block) && !mineSlot.has(_blockId(x)));
+    if (clash.length) {
+      conflicts.push({
+        op, what: _missionName(op.key.split('_')[0]) + ' · heli ' + (Number(op.key.split('_')[1]) + 1),
+        why: clash.every(x => x.pilot === op.block.pilot)
+          ? 'the same block was moved or resized on the Sheet too'
+          : 'that slot was filled on the Sheet over the same dates',
+        mine: _blockSummary(op.block), theirs: clash.map(_blockSummary).join(' · '), clash: clash.map(_blockId)
+      });
+      continue;
+    }
+    arr.push(_mClone(op.block));
+    arr.sort((a, b) => a.start.localeCompare(b.start));
+    applied++;
+  }
+  return { applied, conflicts };
+}
+
+// Apply one side of a conflict. 'theirs' is always a no-op — the Sheet already holds it.
+function _resolveConflict(c, choice) {
+  if (choice !== 'mine') return;
+  const op = c.op;
+  if (op.op === 'rot-set') { const p = PILOTS.find(x => x.name === op.pilot); if (p) p.rot = _mClone(op.mine); return; }
+  if (op.op === 'mission-color') { const m = MISSIONS.find(x => String(x.id) === String(op.id)); if (m) m.color = op.mine; return; }
+  if (op.op === 'asgn-add' || op.op === 'asgn-del') {
+    const arr = asgn[op.key] || (asgn[op.key] = []);
+    const drop = new Set(c.clash || []);
+    asgn[op.key] = arr.filter(x => !drop.has(_blockId(x)));
+    if (op.op === 'asgn-add') {
+      asgn[op.key].push(_mClone(op.block));
+      asgn[op.key].sort((a, b) => a.start.localeCompare(b.start));
+    }
+    if (!asgn[op.key].length) delete asgn[op.key];
+  }
+}
+
+// --- 3. The conflict dialog. Defaults to KEEPING MINE: the whole point of the merge
+// is that the person at the keyboard stops losing work, and every "theirs" is still
+// safely on the Sheet if they pick wrong. Cancel keeps the merged-but-uncommitted
+// state on screen so nothing is thrown away by walking away.
+function showConflictModal(conflicts) {
+  return new Promise(resolve => {
+    const choice = conflicts.map(() => 'mine');
+    const ov = document.createElement('div');
+    ov.style.cssText = 'position:fixed;inset:0;z-index:100000;background:rgba(0,0,0,.55);display:flex;align-items:center;justify-content:center;padding:24px';
+    const esc = t => String(t).replace(/[&<>]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;' }[c]));
+    const rows = () => conflicts.map((c, i) => `
+      <div style="border:1px solid var(--border);border-radius:6px;padding:9px 11px;margin-bottom:8px">
+        <div style="font-weight:700;font-size:12px;margin-bottom:2px">${esc(c.what)}</div>
+        <div style="font-size:11px;color:var(--muted);margin-bottom:7px">${esc(c.why)}</div>
+        <label style="display:block;font-size:11px;margin-bottom:4px;cursor:pointer">
+          <input type="radio" name="cf${i}" value="mine" ${choice[i] === 'mine' ? 'checked' : ''}>
+          <b>Keep my change</b> — ${esc(c.mine)}</label>
+        <label style="display:block;font-size:11px;cursor:pointer">
+          <input type="radio" name="cf${i}" value="theirs" ${choice[i] === 'theirs' ? 'checked' : ''}>
+          Keep the Sheet's — ${esc(c.theirs)}</label>
+      </div>`).join('');
+    ov.innerHTML = `
+      <div style="background:var(--surface);color:var(--text);border:1px solid var(--border);border-radius:9px;max-width:620px;width:100%;max-height:82vh;display:flex;flex-direction:column;box-shadow:0 12px 40px rgba(0,0,0,.45)">
+        <div style="padding:13px 15px 9px">
+          <div style="font-size:14px;font-weight:700">🔀 ${conflicts.length} change${conflicts.length > 1 ? 's' : ''} need${conflicts.length > 1 ? '' : 's'} a decision</div>
+          <div style="font-size:11px;color:var(--muted);margin-top:3px">Everything else merged cleanly. These were edited on the Sheet as well as here.</div>
+        </div>
+        <div id="cfBody" style="padding:0 15px;overflow:auto;flex:1">${rows()}</div>
+        <div style="padding:11px 15px;display:flex;gap:7px;align-items:center;border-top:1px solid var(--border)">
+          <button id="cfAllMine" style="font-size:11px">Keep all mine</button>
+          <button id="cfAllTheirs" style="font-size:11px">Keep all theirs</button>
+          <span style="flex:1"></span>
+          <button id="cfCancel" style="font-size:11px">Don't commit yet</button>
+          <button id="cfOk" style="font-size:11px;font-weight:700;background:var(--teal);border-color:var(--teal);color:#fff">Commit merged</button>
+        </div>
+      </div>`;
+    ov.querySelectorAll('button').forEach(b => { b.style.cssText += ';background:var(--surface2);border:1px solid var(--border);color:var(--text);padding:5px 11px;border-radius:5px;cursor:pointer;font-weight:600'; });
+    ov.querySelector('#cfOk').style.cssText += ';background:var(--teal);border-color:var(--teal);color:#fff';
+    document.body.appendChild(ov);
+
+    const sync = () => ov.querySelectorAll('input[type=radio]').forEach(r => {
+      const i = Number(r.name.slice(2)); if (r.checked) choice[i] = r.value;
+    });
+    ov.addEventListener('change', sync);
+    const setAll = v => { choice.fill(v); ov.querySelectorAll('input[type=radio]').forEach(r => { r.checked = r.value === v; }); };
+    ov.querySelector('#cfAllMine').onclick = () => setAll('mine');
+    ov.querySelector('#cfAllTheirs').onclick = () => setAll('theirs');
+    const close = ok => { ov.remove(); resolve(ok); };
+    ov.querySelector('#cfCancel').onclick = () => close(false);
+    ov.querySelector('#cfOk').onclick = () => { sync(); conflicts.forEach((c, i) => _resolveConflict(c, choice[i])); close(true); };
+  });
+}
+
+// --- 4. The stash. A merge reloads the page's data mid-flight, so for a few hundred
+// milliseconds the only copy of the user's work is in a local variable. Write it to
+// localStorage first. Cleared on a successful commit; recovered on next load if not.
+function stashOps(ops) {
+  try { localStorage.setItem(PENDING_OPS_KEY, JSON.stringify({ ts: new Date().toISOString(), ops })); } catch (e) {}
+}
+function clearStash() { try { localStorage.removeItem(PENDING_OPS_KEY); } catch (e) {} }
+function readStash() {
+  try {
+    const s = JSON.parse(localStorage.getItem(PENDING_OPS_KEY) || 'null');
+    if (!s || !Array.isArray(s.ops) || !s.ops.length) return null;
+    if (Date.now() - new Date(s.ts).getTime() > 24 * 3600 * 1000) { clearStash(); return null; }
+    return s;
+  } catch (e) { return null; }
+}
+// Offered once at load, and only when the board is clean — replaying a stash on top of
+// fresh unsaved work would mix two sessions' edits together.
+function offerStashRecovery() {
+  const s = readStash();
+  if (!s || isDirty || LOADED_FROM_CACHE) return;
+  const bar = document.createElement('div');
+  bar.style.cssText = 'position:fixed;top:0;left:0;right:0;z-index:99998;background:#4527A0;color:#fff;font:600 12px/1.5 -apple-system,BlinkMacSystemFont,sans-serif;padding:8px 14px;text-align:center;box-shadow:0 2px 8px rgba(0,0,0,.3)';
+  const when = new Date(s.ts).toLocaleString();
+  bar.innerHTML = `♻️ An interrupted merge left <b>${s.ops.length}</b> uncommitted edit${s.ops.length > 1 ? 's' : ''} from ${when}. `
+    + `<button id="stRe" style="margin:0 4px;font:600 11px -apple-system;padding:3px 9px;border-radius:4px;border:1px solid rgba(255,255,255,.5);background:rgba(255,255,255,.15);color:#fff;cursor:pointer">Re-apply</button>`
+    + `<button id="stNo" style="font:600 11px -apple-system;padding:3px 9px;border-radius:4px;border:1px solid rgba(255,255,255,.35);background:none;color:#fff;cursor:pointer">Discard</button>`;
+  document.body.appendChild(bar);
+  bar.querySelector('#stNo').onclick = () => { clearStash(); bar.remove(); };
+  bar.querySelector('#stRe').onclick = async () => {
+    bar.remove();
+    const { applied, conflicts } = applyOps(s.ops);
+    if (conflicts.length) await showConflictModal(conflicts);
+    updateNid(); render(); updateDirtyState(); saveData();
+    showMessage(`♻️ Re-applied ${applied} edit${applied === 1 ? '' : 's'} — review, then Commit`, 'info');
+  };
+}
+
+// --- 5. The rebase itself. Called when commitAll rejects a stale commit, and from
+// the "Merge now" button on the freshness banner.
+// Returns true when the board is merged and safe to commit again.
+async function mergeWithSheet() {
+  const ops = computeMyOps();
+  if (!ops.length) {                       // nothing of mine to carry across
+    const fresh = await fetchFromAPI(); asgn = fresh; updateNid(); render(); updateDirtyState();
+    return true;
+  }
+  stashOps(ops);
+  showMessage('🔀 Merging your edits with the Sheet…', 'info');
+  let fresh;
+  try {
+    fresh = await fetchFromAPI();
+  } catch (e) {
+    // The stash is already written, so nothing is lost — say so, because "failed to
+    // save" on its own is exactly the message that makes people retype their work.
+    throw new Error('Could not reach the Sheet to merge. Your edits are saved locally and will be offered back when you reload.');
+  }
+  asgn = fresh;
+  updateNid();
+  const { applied, conflicts } = applyOps(ops);
+  let ok = true;
+  if (conflicts.length) ok = await showConflictModal(conflicts);
+  render(); updateDirtyState(); saveData();
+  if (!ok) {
+    showMessage('Merged on screen but not committed — your edits are still here', 'info');
+    return false;
+  }
+  const clean = applied;
+  showMessage(`🔀 Merged — ${clean} of your edit${clean === 1 ? '' : 's'} carried over${conflicts.length ? `, ${conflicts.length} resolved` : ''}`, 'success');
+  return true;
+}
+
+async function commitToAPI(attempt) {
+  attempt = attempt || 0;
   try {
     // Build rows for the API
     const rows = [];
@@ -1072,9 +1390,19 @@ async function commitToAPI() {
       if (caResp.ok) {
         const ca = await caResp.json();
         if (ca && ca.stale) {
-          alert('⚠️ Someone committed changes after this page loaded, so your view is out of date.\n\nThe planner will now reload with the latest data — please re-apply your change and commit again.');
-          location.reload();
-          return new Promise(() => {}); // page is reloading; halt here
+          // Someone else committed while this page was open. Don't throw the work
+          // away — rebase onto their version and try again, exactly like a push that
+          // loses the race. Bounded, because each retry can lose the race too.
+          if (attempt >= MERGE_MAX_ATTEMPTS) {
+            throw new Error('The Sheet kept changing while merging — nothing was written. Your edits are still on screen; press Commit again.');
+          }
+          const merged = await mergeWithSheet();
+          if (!merged) {
+            // User chose not to commit the merge. The board holds the merged state;
+            // leave it dirty so Commit is still there when they're ready.
+            return { success: false, merged: true, rowsWritten: 0 };
+          }
+          return commitToAPI(attempt + 1);
         }
         if (ca && ca.success) {
           SHEET_REV = (ca.rev !== undefined && ca.rev !== null) ? Number(ca.rev) : SHEET_REV;
@@ -1105,6 +1433,7 @@ async function commitToAPI() {
       updateChangeBadge();
       renderChangePanel();
     }
+    clearStash();   // the work is on the Sheet; the safety copy is no longer needed
     lastCommitTime = new Date();
     updateDirtyState();
 
@@ -1375,7 +1704,10 @@ async function commitChanges() {
   showSaving();
   
   try {
-    await commitToAPI();
+    const res = await commitToAPI();
+    // A merge the user chose not to commit is not a failure and not a save — the
+    // board holds the merged result and stays dirty, waiting for them.
+    if (res && res.success === false && res.merged) { hideSaving(false); return; }
     hideSaving(true);
   } catch (error) {
     hideSaving(false);
@@ -3521,6 +3853,10 @@ async function initApp() {
     if(urlParams.get('mode')==='simulate') simulateMode=true;
     applyModes(); // apply initial mode state
     setTimeout(scr, 50);
+    // If a merge was interrupted last time (tab closed, crash, network drop), the
+    // user's edits are still in localStorage. Offer them back — but only onto a
+    // clean board, never mixed into a fresh session's work.
+    setTimeout(offerStashRecovery, 400);
   }
 }
 
