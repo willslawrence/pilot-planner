@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Pilot Planner v4.12 — THC H125</title>
+<title>Pilot Planner v4.13 — THC H125</title>
 <style>
 :root {
   --bg: #0f1123;
@@ -334,7 +334,7 @@ body.has-pilot-focus .p-row.pilot-focused .pname { font-weight:700; color:var(--
   <div class="leg"><input type="color" id="cc-proposedOn" style="width:14px;height:14px;border:none;padding:0;cursor:pointer;border-radius:2px" onchange="ROT_COLORS.proposedOn=this.value;saveRotColors();render()"> Proposed On</div>
   <div class="leg"><input type="color" id="cc-proposedOff" style="width:14px;height:14px;border:none;padding:0;cursor:pointer;border-radius:2px" onchange="ROT_COLORS.proposedOff=this.value;saveRotColors();render()"> Proposed Off</div>
   <div class="leg"><div class="lsw" style="background:var(--yellow)"></div> Cursor</div>
-  <span id="app-version" style="font-size:10px;opacity:.5;cursor:pointer;margin-left:4px;user-select:none">v4.12</span>
+  <span id="app-version" style="font-size:10px;opacity:.5;cursor:pointer;margin-left:4px;user-select:none">v4.13</span>
   <span id="legend-hint" style="margin-left:auto;font-size:10px">Add a note about 'Vacation' or 'Pilot Added' with the + Add Rotation button.</span>
 </div>
 
@@ -390,41 +390,36 @@ let SHEET_REV = null; // Sheet revision at load time — stale-page guard (commi
 let LOADED_FROM_CACHE = false; // true when the API was unreachable and the page shows localStorage data — Commit is refused
 let isDirty = false;
 
-// --- Freshness watch: auto-refresh when the Sheet moves on ---
-// The Obsidian syncs are event-driven (missions: seconds after a vault edit;
-// pilots: every 15 min), so there's no fixed cadence to refresh around.
-// Instead: check the Sheet's rev on window focus (throttled) and every 30 min.
-// Sheet changed + no unsaved edits -> reload seamlessly. Unsaved edits -> show
-// a banner (committing would be rejected by the guard and reload anyway).
+// --- Freshness watch: keep a clean board current, silently ---
+// The Obsidian syncs are event-driven, so the Sheet can move on at any time. v4.12 showed
+// a banner and a "Merge now" button when it did; with one small edit that stacked up to
+// five notices before the one that mattered ("Saved"). Nothing here needs the user:
+//   · no unsaved edits  -> quietly pull the new data into the board, no reload flash
+//   · unsaved edits     -> leave the board alone; Commit merges onto whatever is newest
+//   · a popup is open   -> wait; never swap data under someone mid-edit
 let _lastRevCheck = 0;
-let _staleBanner = null;
+let _mergeBusy = false;
+async function readAllFromSheet() {
+  const resp = await fetch(`${BASE_URL}?action=readAll`, { cache: 'no-store' });
+  if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+  return resp.json();
+}
+function _userIsMidEdit() {
+  updateDirtyState();
+  return isDirty || !!pop || _mergeBusy || !!document.getElementById('cfOk') || !!_savingOverlay;
+}
 async function checkFreshness() {
-  if (SHEET_REV === null) return;               // initial load not finished
+  if (SHEET_REV === null || LOADED_FROM_CACHE) return;   // initial load not finished / read-only
+  if (_userIsMidEdit()) return;
   const now = Date.now();
-  if (now - _lastRevCheck < 60000) return;      // throttle focus-event spam
+  if (now - _lastRevCheck < 60000) return;               // throttle focus-event spam
   _lastRevCheck = now;
   try {
-    const resp = await fetch(`${BASE_URL}?action=readAll`);
-    if (!resp.ok) return;
-    const data = await resp.json();
+    const data = await readAllFromSheet();
     if (data.rev === undefined || data.rev === null || Number(data.rev) === SHEET_REV) return;
-    if (!isDirty) {
-      showMessage('Newer data on the Sheet — refreshing…', 'info');
-      setTimeout(() => location.reload(), 1200);
-    } else if (!_staleBanner) {
-      _staleBanner = document.createElement('div');
-      _staleBanner.style.cssText = 'position:fixed;top:0;left:0;right:0;z-index:99999;background:#b26a00;color:#fff;font:600 13px/1.45 -apple-system,BlinkMacSystemFont,sans-serif;padding:9px 44px 9px 14px;text-align:center;box-shadow:0 2px 8px rgba(0,0,0,.3)';
-      _staleBanner.innerHTML = '⚠️ The Sheet has newer data than this page. '
-        + '<button id="mergeNowBtn" style="font:600 11px -apple-system;padding:3px 10px;margin-left:6px;border-radius:4px;border:1px solid rgba(255,255,255,.55);background:rgba(255,255,255,.18);color:#fff;cursor:pointer">🔀 Merge now</button>'
-        + '<span style="opacity:.85;margin-left:8px">Your edits are kept — Commit merges automatically too.</span>'
-        + '<span onclick="this.parentNode.remove();_staleBanner=null" style="position:absolute;right:14px;top:8px;cursor:pointer;font-size:16px">✕</span>';
-      document.body.appendChild(_staleBanner);
-      _staleBanner.querySelector('#mergeNowBtn').onclick = async (ev) => {
-        ev.target.disabled = true; ev.target.textContent = 'Merging…';
-        try { await mergeWithSheet(); } catch (e) { showMessage('Merge failed: ' + e.message, 'error'); }
-        if (_staleBanner) { _staleBanner.remove(); _staleBanner = null; }
-      };
-    }
+    if (_userIsMidEdit()) return;                        // they started editing while we fetched
+    asgn = await fetchFromAPI(data);
+    updateNid(); updateDirtyState(); saveData(); render();
   } catch (e) { /* offline / transient — ignore, next check will catch it */ }
 }
 window.addEventListener('focus', checkFreshness);
@@ -827,11 +822,11 @@ function renderChangePanel(){
 }
 
 // ====== API FUNCTIONS ======
-async function fetchFromAPI() {
+async function fetchFromAPI(preloaded) {
   try {
-    const response = await fetch(`${BASE_URL}?action=readAll`);
-    if (!response.ok) throw new Error(`HTTP ${response.status}`);
-    const data = await response.json();
+    // Callers that must check something between the network wait and the state swap
+    // (the freshness watch, the merge) fetch first and hand the payload in.
+    const data = preloaded || await readAllFromSheet();
 
     // Stale-page guard: remember the Sheet revision this page loaded from.
     SHEET_REV = (data.rev !== undefined && data.rev !== null) ? Number(data.rev) : null;
@@ -1161,8 +1156,8 @@ function _resolveConflict(c, choice) {
 
 // --- 3. The conflict dialog. Defaults to KEEPING MINE: the whole point of the merge
 // is that the person at the keyboard stops losing work, and every "theirs" is still
-// safely on the Sheet if they pick wrong. Cancel keeps the merged-but-uncommitted
-// state on screen so nothing is thrown away by walking away.
+// safely on the Sheet if they pick wrong. Deliberately no cancel: a half-merged board
+// that isn't saved is one more state to explain. Pick, press Save, done.
 function showConflictModal(conflicts) {
   return new Promise(resolve => {
     const choice = conflicts.map(() => 'mine');
@@ -1183,16 +1178,15 @@ function showConflictModal(conflicts) {
     ov.innerHTML = `
       <div style="background:var(--surface);color:var(--text);border:1px solid var(--border);border-radius:9px;max-width:620px;width:100%;max-height:82vh;display:flex;flex-direction:column;box-shadow:0 12px 40px rgba(0,0,0,.45)">
         <div style="padding:13px 15px 9px">
-          <div style="font-size:14px;font-weight:700">🔀 ${conflicts.length} change${conflicts.length > 1 ? 's' : ''} need${conflicts.length > 1 ? '' : 's'} a decision</div>
-          <div style="font-size:11px;color:var(--muted);margin-top:3px">Everything else merged cleanly. These were edited on the Sheet as well as here.</div>
+          <div style="font-size:14px;font-weight:700">Someone else changed ${conflicts.length === 1 ? 'this' : 'these'} too</div>
+          <div style="font-size:11px;color:var(--muted);margin-top:3px">Everything else is saved with yours. Pick which version to keep.</div>
         </div>
         <div id="cfBody" style="padding:0 15px;overflow:auto;flex:1">${rows()}</div>
         <div style="padding:11px 15px;display:flex;gap:7px;align-items:center;border-top:1px solid var(--border)">
           <button id="cfAllMine" style="font-size:11px">Keep all mine</button>
           <button id="cfAllTheirs" style="font-size:11px">Keep all theirs</button>
           <span style="flex:1"></span>
-          <button id="cfCancel" style="font-size:11px">Don't commit yet</button>
-          <button id="cfOk" style="font-size:11px;font-weight:700;background:var(--teal);border-color:var(--teal);color:#fff">Commit merged</button>
+          <button id="cfOk" style="font-size:11px;font-weight:700;background:var(--teal);border-color:var(--teal);color:#fff">Save</button>
         </div>
       </div>`;
     ov.querySelectorAll('button').forEach(b => { b.style.cssText += ';background:var(--surface2);border:1px solid var(--border);color:var(--text);padding:5px 11px;border-radius:5px;cursor:pointer;font-weight:600'; });
@@ -1207,7 +1201,6 @@ function showConflictModal(conflicts) {
     ov.querySelector('#cfAllMine').onclick = () => setAll('mine');
     ov.querySelector('#cfAllTheirs').onclick = () => setAll('theirs');
     const close = ok => { ov.remove(); resolve(ok); };
-    ov.querySelector('#cfCancel').onclick = () => close(false);
     ov.querySelector('#cfOk').onclick = () => { sync(); conflicts.forEach((c, i) => _resolveConflict(c, choice[i])); close(true); };
   });
 }
@@ -1235,8 +1228,8 @@ function offerStashRecovery() {
   const bar = document.createElement('div');
   bar.style.cssText = 'position:fixed;top:0;left:0;right:0;z-index:99998;background:#4527A0;color:#fff;font:600 12px/1.5 -apple-system,BlinkMacSystemFont,sans-serif;padding:8px 14px;text-align:center;box-shadow:0 2px 8px rgba(0,0,0,.3)';
   const when = new Date(s.ts).toLocaleString();
-  bar.innerHTML = `♻️ An interrupted merge left <b>${s.ops.length}</b> uncommitted edit${s.ops.length > 1 ? 's' : ''} from ${when}. `
-    + `<button id="stRe" style="margin:0 4px;font:600 11px -apple-system;padding:3px 9px;border-radius:4px;border:1px solid rgba(255,255,255,.5);background:rgba(255,255,255,.15);color:#fff;cursor:pointer">Re-apply</button>`
+  bar.innerHTML = `♻️ You had <b>${s.ops.length}</b> unsaved change${s.ops.length > 1 ? 's' : ''} when this page closed (${when}). `
+    + `<button id="stRe" style="margin:0 4px;font:600 11px -apple-system;padding:3px 9px;border-radius:4px;border:1px solid rgba(255,255,255,.5);background:rgba(255,255,255,.15);color:#fff;cursor:pointer">Restore</button>`
     + `<button id="stNo" style="font:600 11px -apple-system;padding:3px 9px;border-radius:4px;border:1px solid rgba(255,255,255,.35);background:none;color:#fff;cursor:pointer">Discard</button>`;
   document.body.appendChild(bar);
   bar.querySelector('#stNo').onclick = () => { clearStash(); bar.remove(); };
@@ -1245,7 +1238,7 @@ function offerStashRecovery() {
     const { applied, conflicts } = applyOps(s.ops);
     if (conflicts.length) await showConflictModal(conflicts);
     updateNid(); render(); updateDirtyState(); saveData();
-    showMessage(`♻️ Re-applied ${applied} edit${applied === 1 ? '' : 's'} — review, then Commit`, 'info');
+    showMessage(`Restored — press Commit to save`, 'info');
   };
 }
 
@@ -1253,34 +1246,35 @@ function offerStashRecovery() {
 // the "Merge now" button on the freshness banner.
 // Returns true when the board is merged and safe to commit again.
 async function mergeWithSheet() {
-  const ops = computeMyOps();
-  if (!ops.length) {                       // nothing of mine to carry across
-    const fresh = await fetchFromAPI(); asgn = fresh; updateNid(); render(); updateDirtyState();
-    return true;
-  }
-  stashOps(ops);
-  showMessage('🔀 Merging your edits with the Sheet…', 'info');
-  let fresh;
+  _mergeBusy = true;
   try {
-    fresh = await fetchFromAPI();
-  } catch (e) {
-    // The stash is already written, so nothing is lost — say so, because "failed to
-    // save" on its own is exactly the message that makes people retype their work.
-    throw new Error('Could not reach the Sheet to merge. Your edits are saved locally and will be offered back when you reload.');
+    let data;
+    try {
+      data = await readAllFromSheet();
+    } catch (e) {
+      throw new Error('Could not reach Google Sheets — nothing was saved. Your edits are still on screen; try Commit again.');
+    }
+    // Diff AFTER the network wait, not before: anything the user changed while the
+    // request was in flight is part of their changeset too. The baseline hasn't moved
+    // yet, so this is still "everything since the page loaded".
+    const ops = computeMyOps();
+    stashOps(ops);
+    asgn = await fetchFromAPI(data);
+    updateNid();
+    const { conflicts } = applyOps(ops);
+    let ok = true;
+    if (conflicts.length) {
+      // The saving spinner would sit behind the dialog looking like it's still working.
+      const hadOverlay = !!_savingOverlay;
+      if (hadOverlay) hideSaving();
+      ok = await showConflictModal(conflicts);
+      if (hadOverlay && ok) showSaving();
+    }
+    render(); updateDirtyState(); saveData();
+    return ok;
+  } finally {
+    _mergeBusy = false;
   }
-  asgn = fresh;
-  updateNid();
-  const { applied, conflicts } = applyOps(ops);
-  let ok = true;
-  if (conflicts.length) ok = await showConflictModal(conflicts);
-  render(); updateDirtyState(); saveData();
-  if (!ok) {
-    showMessage('Merged on screen but not committed — your edits are still here', 'info');
-    return false;
-  }
-  const clean = applied;
-  showMessage(`🔀 Merged — ${clean} of your edit${clean === 1 ? '' : 's'} carried over${conflicts.length ? `, ${conflicts.length} resolved` : ''}`, 'success');
-  return true;
 }
 
 async function commitToAPI(attempt) {
@@ -1707,7 +1701,7 @@ async function commitChanges() {
     const res = await commitToAPI();
     // A merge the user chose not to commit is not a failure and not a save — the
     // board holds the merged result and stays dirty, waiting for them.
-    if (res && res.success === false && res.merged) { hideSaving(false); return; }
+    if (res && res.success === false && res.merged) { hideSaving(); return; }
     hideSaving(true);
   } catch (error) {
     hideSaving(false);
@@ -1723,6 +1717,7 @@ async function resetFromAPI() {
     return;
   }
   
+  clearStash();   // the user just chose to throw these edits away
   showLoading();
   try {
     const apiAssignments = await fetchFromAPI();
@@ -2943,7 +2938,8 @@ function saveWorkoverPop(){
   if(!adminMode && !simulateMode){
     showSaving();
     commitToAPI()
-      .then(()=>{
+      .then(res=>{
+        if(res && res.success===false && res.merged){ hideSaving(); return; }  // chose not to commit: nothing saved, nothing to announce
         hideSaving(true);
         // Notify only after the request is durably saved to the sheet.
         const reqLabel = rotRequestLabel(rotType);
