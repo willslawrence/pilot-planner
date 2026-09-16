@@ -400,7 +400,7 @@ let isDirty = false;
 let _lastRevCheck = 0;
 let _mergeBusy = false;
 async function readAllFromSheet() {
-  const resp = await fetch(`${BASE_URL}?action=readAll`, { cache: 'no-store' });
+  const resp = await fetch(`${BASE_URL}?action=readAll`);
   if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
   return resp.json();
 }
