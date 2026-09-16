@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Pilot Planner v4.13 — THC H125</title>
+<title>Pilot Planner v4.14 — THC H125</title>
 <style>
 :root {
   --bg: #0f1123;
@@ -334,7 +334,7 @@ body.has-pilot-focus .p-row.pilot-focused .pname { font-weight:700; color:var(--
   <div class="leg"><input type="color" id="cc-proposedOn" style="width:14px;height:14px;border:none;padding:0;cursor:pointer;border-radius:2px" onchange="ROT_COLORS.proposedOn=this.value;saveRotColors();render()"> Proposed On</div>
   <div class="leg"><input type="color" id="cc-proposedOff" style="width:14px;height:14px;border:none;padding:0;cursor:pointer;border-radius:2px" onchange="ROT_COLORS.proposedOff=this.value;saveRotColors();render()"> Proposed Off</div>
   <div class="leg"><div class="lsw" style="background:var(--yellow)"></div> Cursor</div>
-  <span id="app-version" style="font-size:10px;opacity:.5;cursor:pointer;margin-left:4px;user-select:none">v4.13</span>
+  <span id="app-version" style="font-size:10px;opacity:.5;cursor:pointer;margin-left:4px;user-select:none">v4.14</span>
   <span id="legend-hint" style="margin-left:auto;font-size:10px">Add a note about 'Vacation' or 'Pilot Added' with the + Add Rotation button.</span>
 </div>
 
@@ -1118,13 +1118,17 @@ function applyOps(ops) {
     const arr = asgn[op.key];
     if (arr.some(x => _blockId(x) === _blockId(op.block))) continue;  // they added the same block
     const mineSlot = new Set(op.mineSlot || []);
-    const clash = arr.filter(x => _overlaps(x, op.block) && !mineSlot.has(_blockId(x)));
+    // Only the SAME PILOT can clash. A heli slot legitimately holds several pilots over
+    // the same dates — a Training slot carries Lisa, Lindsay and Stephan for one REMS
+    // session — and addAs() deliberately allows it. v4.12–13 treated any overlap as a
+    // double-booking: two people each moving a DIFFERENT pilot's block raised a dialog,
+    // and "keep mine" deleted the other pilot's training (Lisa le Roux, 2026-09-16).
+    // Different pilots are never a conflict — both blocks are simply kept.
+    const clash = arr.filter(x => x.pilot === op.block.pilot && _overlaps(x, op.block) && !mineSlot.has(_blockId(x)));
     if (clash.length) {
       conflicts.push({
-        op, what: _missionName(op.key.split('_')[0]) + ' · heli ' + (Number(op.key.split('_')[1]) + 1),
-        why: clash.every(x => x.pilot === op.block.pilot)
-          ? 'the same block was moved or resized on the Sheet too'
-          : 'that slot was filled on the Sheet over the same dates',
+        op, what: op.block.pilot + ' · ' + _missionName(op.key.split('_')[0]),
+        why: 'the same block was moved or resized on the Sheet too',
         mine: _blockSummary(op.block), theirs: clash.map(_blockSummary).join(' · '), clash: clash.map(_blockId)
       });
       continue;
