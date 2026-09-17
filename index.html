@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Pilot Planner v4.14 — THC H125</title>
+<title>Pilot Planner v4.15 — THC H125</title>
 <style>
 :root {
   --bg: #0f1123;
@@ -334,7 +334,7 @@ body.has-pilot-focus .p-row.pilot-focused .pname { font-weight:700; color:var(--
   <div class="leg"><input type="color" id="cc-proposedOn" style="width:14px;height:14px;border:none;padding:0;cursor:pointer;border-radius:2px" onchange="ROT_COLORS.proposedOn=this.value;saveRotColors();render()"> Proposed On</div>
   <div class="leg"><input type="color" id="cc-proposedOff" style="width:14px;height:14px;border:none;padding:0;cursor:pointer;border-radius:2px" onchange="ROT_COLORS.proposedOff=this.value;saveRotColors();render()"> Proposed Off</div>
   <div class="leg"><div class="lsw" style="background:var(--yellow)"></div> Cursor</div>
-  <span id="app-version" style="font-size:10px;opacity:.5;cursor:pointer;margin-left:4px;user-select:none">v4.14</span>
+  <span id="app-version" style="font-size:10px;opacity:.5;cursor:pointer;margin-left:4px;user-select:none">v4.15</span>
   <span id="legend-hint" style="margin-left:auto;font-size:10px">Add a note about 'Vacation' or 'Pilot Added' with the + Add Rotation button.</span>
 </div>
 
@@ -603,7 +603,8 @@ const CHG_KIND = {
   workover: {icon:'💪', noun:'work over'},
   vacation: {icon:'🌴', noun:'vacation'},
   training: {icon:'📚', noun:'training'},
-  available:{icon:'🙋', noun:'pilot added'},
+  available:{icon:'🙋', noun:'Pilot Added block'},   // "Pilot Added" is the v4.01 label; the bare word read "pilot added added"
+  assignment:{icon:'🚁', noun:'assignment'},
   proposed: {icon:'📝', noun:'proposed rotation'},
   pilot:    {icon:'👤', noun:'pilot'},
   other:    {icon:'📌', noun:'block'}
@@ -648,6 +649,75 @@ function chgBlockMap(rot){
 }
 
 function chgSnapshot(){ return PILOTS.map(p => ({n:p.name, rot:p.rot})); }
+
+// ---- mission assignments ----------------------------------------------------
+// Excluded in v3.89 on the guess that coverage edits were Will's constant noise. Wrong
+// audience: Scheduling's own edits ARE assignments. On 2026-09-17 Michelle fixed Davide
+// Zambonini's Rally Dakar slot (end 18 Dec 2027 -> 18 Jan 2027), told Will by text, and
+// the panel said nothing. A change log that misses what its readers actually change is
+// no change log.
+//
+// Same rules as rotations: one line per pilot per mission, boundary dates not spans,
+// and a mission-wide shift (its end date moved, so every slot followed) collapses to ONE
+// line rather than one per pilot.
+const CHG_MISSION_COLLAPSE = 4;   // this many pilots on one mission in one commit = one line
+
+function diffAssignments(baseAsgn, nextAsgn){
+  const flat = a => {
+    const out = [];
+    for (const [key, list] of Object.entries(a || {})) {
+      const mid = key.slice(0, key.lastIndexOf('_'));
+      for (const x of (list || [])) {
+        if (x && x.pilot && x.start && x.end) out.push({mid, key, pilot:x.pilot, s:x.start, e:x.end});
+      }
+    }
+    return out;
+  };
+  const sig = x => x.key + '|' + x.pilot + '|' + x.s + '|' + x.e;   // note text deliberately excluded
+  const b = flat(baseAsgn), n = flat(nextAsgn);
+  const bs = new Set(b.map(sig)), ns = new Set(n.map(sig));
+  const added = n.filter(x => !bs.has(sig(x))), removed = b.filter(x => !ns.has(sig(x)));
+  if (!added.length && !removed.length) return [];
+
+  const mName = mid => { const m = (typeof MISSIONS !== 'undefined' ? MISSIONS : []).find(m => String(m.id) === String(mid)); return m ? m.name : mid; };
+  const ts = new Date().toISOString();
+  const groups = new Map();   // mid -> Map(pilot -> {added, removed, bounds:Set})
+  for (const [list, k] of [[added,'added'], [removed,'removed']]) {
+    for (const x of list) {
+      if (!groups.has(x.mid)) groups.set(x.mid, new Map());
+      const g = groups.get(x.mid);
+      if (!g.has(x.pilot)) g.set(x.pilot, {added:[], removed:[]});
+      g.get(x.pilot)[k].push(x);
+    }
+  }
+  const monthsFor = r => {
+    // Boundaries that moved, not whole spans — a typo'd end date should read as the
+    // months it touched, not every month in between.
+    const bd = new Set(r.removed.flatMap(x => [x.s, x.e])), nd = new Set(r.added.flatMap(x => [x.s, x.e]));
+    let moved = [...bd].filter(d => !nd.has(d)).concat([...nd].filter(d => !bd.has(d)));
+    if (!moved.length) moved = r.added.concat(r.removed).map(x => x.s);   // slot swap, same dates
+    return new Set(moved.map(chgMonthKey));
+  };
+
+  const out = [];
+  for (const [mid, g] of groups) {
+    const name = mName(mid);
+    if (g.size >= CHG_MISSION_COLLAPSE) {
+      const months = new Set();
+      for (const r of g.values()) monthsFor(r).forEach(m => months.add(m));
+      out.push({ts, pilot:name, kind:'assignment', period:chgPeriod(months),
+                summary: g.size + ' pilot assignments changed'});
+      continue;
+    }
+    for (const [pilot, r] of g) {
+      const summary = (r.added.length && r.removed.length) ? name + ' assignment changed'
+                    : r.added.length ? 'assigned to ' + name
+                    : 'removed from ' + name;
+      out.push({ts, pilot, kind:'assignment', period:chgPeriod(monthsFor(r)), summary});
+    }
+  }
+  return out;
+}
 
 // Diff a baseline snapshot against the current one. Returns rolled-up entries:
 // one per pilot per kind, never one per block.
@@ -796,7 +866,7 @@ function renderChangePanel(){
 
   if (!all.length) {
     body.innerHTML = '<div class="cp-empty">No roster changes in the last '
-      + CHG_WINDOW_DAYS + ' days.<br>Rotation moves, vacation, work over and availability show up here.</div>';
+      + CHG_WINDOW_DAYS + ' days.<br>Rotation moves, vacation, work over, Pilot Added blocks and mission assignments show up here.</div>';
     foot.innerHTML = '';
     return;
   }
@@ -1360,7 +1430,8 @@ async function commitToAPI(attempt) {
     // because a broken diff must never block a roster commit.
     let chgEntries = [];
     try {
-      chgEntries = diffRotations(JSON.parse(ORIGINAL_ROTATIONS || '[]'), chgSnapshot());
+      chgEntries = diffRotations(JSON.parse(ORIGINAL_ROTATIONS || '[]'), chgSnapshot())
+        .concat(diffAssignments(ORIGINAL_ASSIGNMENTS, asgn));
     } catch (e) {
       console.warn('Change log diff failed — committing without it:', e);
     }
