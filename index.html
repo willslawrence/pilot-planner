@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Pilot Planner v4.16 — THC H125</title>
+<title>Pilot Planner v4.17 — THC H125</title>
 <style>
 :root {
   --bg: #0f1123;
@@ -242,6 +242,9 @@ body.viewer-mode #chgBtn, body.viewer-mode #chgPanel { display:none !important; 
 #chgPanel .cp-scope button:last-child { border-radius:0 5px 5px 0; border-left:none; }
 #chgPanel .cp-scope button.on { background:var(--teal); border-color:var(--teal); color:#fff; }
 #chgPanel .cp-item .cp-by { color:var(--muted); font-size:10px; }
+#chgPanel .cp-saver { font-size:10px; color:var(--muted); padding:5px 13px; border-bottom:1px solid var(--border); flex-shrink:0; }
+#chgPanel .cp-saver a { color:var(--muted); text-decoration:underline; cursor:pointer; }
+#chgPanel .cp-saver a:hover { color:var(--text); }
 #chgBadge {
   position:absolute; top:-5px; right:-5px; min-width:15px; height:15px; padding:0 4px;
   background:var(--accent); color:#fff; border-radius:8px; font-size:9px; font-weight:700;
@@ -325,6 +328,7 @@ body.viewer-mode #chgBtn, body.viewer-mode #chgPanel { display:none !important; 
     <button id="chgScopeRoster" onclick="setChangeScope('roster')" title="Rotation, vacation, work over, training and Pilot Added changes">Roster</button>
     <button id="chgScopeAll" onclick="setChangeScope('all')" title="Everything, including mission assignments">All changes</button>
   </div>
+  <div class="cp-saver" id="chgSaver"></div>
   <div class="cp-body" id="chgBody"></div>
   <div class="cp-foot" id="chgFoot"></div>
 </div>
@@ -350,7 +354,7 @@ body.viewer-mode #chgBtn, body.viewer-mode #chgPanel { display:none !important; 
   <div class="leg"><input type="color" id="cc-proposedOn" style="width:14px;height:14px;border:none;padding:0;cursor:pointer;border-radius:2px" onchange="ROT_COLORS.proposedOn=this.value;saveRotColors();render()"> Proposed On</div>
   <div class="leg"><input type="color" id="cc-proposedOff" style="width:14px;height:14px;border:none;padding:0;cursor:pointer;border-radius:2px" onchange="ROT_COLORS.proposedOff=this.value;saveRotColors();render()"> Proposed Off</div>
   <div class="leg"><div class="lsw" style="background:var(--yellow)"></div> Cursor</div>
-  <span id="app-version" style="font-size:10px;opacity:.5;cursor:pointer;margin-left:4px;user-select:none">v4.16</span>
+  <span id="app-version" style="font-size:10px;opacity:.5;cursor:pointer;margin-left:4px;user-select:none">v4.17</span>
   <span id="legend-hint" style="margin-left:auto;font-size:10px">Add a note about 'Vacation' or 'Pilot Added' with the + Add Rotation button.</span>
 </div>
 
@@ -890,6 +894,13 @@ function renderChangePanel(){
   const sc = chgScope();
   document.getElementById('chgScopeRoster')?.classList.toggle('on', sc === 'roster');
   document.getElementById('chgScopeAll')?.classList.toggle('on', sc === 'all');
+  const sv = document.getElementById('chgSaver');
+  if (sv) {
+    const n = chgSavedName();
+    sv.innerHTML = n
+      ? 'Saving as <b>' + n.replace(/[&<>]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;'}[c])) + '</b> · <a onclick="changeSaver()">change</a>'
+      : 'You\'ll be asked your name on your first save · <a onclick="changeSaver()">set now</a>';
+  }
   const body = document.getElementById('chgBody'), foot = document.getElementById('chgFoot');
   if (!body) return;
   const seen = chgLastSeen();
@@ -1794,12 +1805,21 @@ function hideSaving(success){
 
 // ====== WHO'S SAVING ======
 // The planner has no logins — admin mode is a shared secret held by Will, Lisa, Michele
-// and Roberto. So each save asks who is making it and the change log records the answer.
-// Honour system, not security. The last choice is preselected so a normal save costs one
-// click, but it is asked EVERY time: a remembered name silently mislabels every save made
-// from a shared or borrowed laptop. "Other" takes a typed name for anyone unexpected.
+// and Roberto. So the change log records who saved each change. Honour system, not
+// security. Asked ONCE per browser, on the first save, then remembered: nobody at THC
+// shares a laptop (Will, 2026-09-17 — v4.16 asked on every save and that was friction for
+// nothing). "Saving as … · change" in the Changes panel resets it. "Other" takes a typed
+// name for anyone unexpected.
 const CHG_EDITORS = ['Will Lawrence', 'Lisa le Roux', 'Michele Valenza', 'Roberto Piani'];
 let CHG_BY = '';
+
+function chgSavedName(){ try { return localStorage.getItem('pp_chgBy') || ''; } catch (_) { return ''; } }
+// First save asks; every later save uses the remembered name silently.
+async function whoIsSaving(){ return chgSavedName() || await askWhoIsSaving(); }
+async function changeSaver(){
+  const v = await askWhoIsSaving();
+  if (v) renderChangePanel();
+}
 
 function askWhoIsSaving(){
   return new Promise(resolve => {
@@ -1864,8 +1884,8 @@ async function commitChanges() {
     return;
   }
   
-  const by = await askWhoIsSaving();
-  if (!by) return;              // cancelled: nothing saved, edits stay on screen
+  const by = await whoIsSaving();
+  if (!by) return;              // cancelled the first-time prompt: nothing saved, edits stay on screen
   CHG_BY = by;
 
   const commitBtn = document.getElementById('commitBtn');
@@ -3111,7 +3131,7 @@ function saveWorkoverPop(){
   render();
   // In normal (non-admin, non-simulate) mode, auto-commit to the sheet
   if(!adminMode && !simulateMode){
-    CHG_BY = 'Pilot request — ' + pilotName;   // a pilot's own request; no name prompt
+    CHG_BY = pilotName;   // pilots only ever submit their own requests (Will, 2026-09-17), so no prompt
     showSaving();
     commitToAPI()
       .then(res=>{
