@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Pilot Planner v4.15 — THC H125</title>
+<title>Pilot Planner v4.16 — THC H125</title>
 <style>
 :root {
   --bg: #0f1123;
@@ -230,6 +230,18 @@ body.has-pilot-focus .p-row.pilot-focused .pname { font-weight:700; color:var(--
    not colours, hide toggles, display names or mission edits. Abdul Rahman
    Baghawi asked for it so he can see what moved without re-reading the board. */
 #chgBtn { position:relative; }
+/* Pilots never see the change log — it is a Scheduling / admin tool (Will, 2026-09-17).
+   Shown only in admin and simulate modes; the normal roster view hides both. */
+body.viewer-mode #chgBtn, body.viewer-mode #chgPanel { display:none !important; }
+#chgPanel .cp-scope { display:flex; gap:0; padding:7px 13px; border-bottom:1px solid var(--border); flex-shrink:0; }
+#chgPanel .cp-scope button {
+  flex:1; background:var(--surface2); border:1px solid var(--border); color:var(--muted);
+  font-size:10px; font-weight:700; padding:4px 0; cursor:pointer;
+}
+#chgPanel .cp-scope button:first-child { border-radius:5px 0 0 5px; }
+#chgPanel .cp-scope button:last-child { border-radius:0 5px 5px 0; border-left:none; }
+#chgPanel .cp-scope button.on { background:var(--teal); border-color:var(--teal); color:#fff; }
+#chgPanel .cp-item .cp-by { color:var(--muted); font-size:10px; }
 #chgBadge {
   position:absolute; top:-5px; right:-5px; min-width:15px; height:15px; padding:0 4px;
   background:var(--accent); color:#fff; border-radius:8px; font-size:9px; font-weight:700;
@@ -309,6 +321,10 @@ body.has-pilot-focus .p-row.pilot-focused .pname { font-weight:700; color:var(--
     <button onclick="markChangesRead()" title="Clear the unread badge">Mark read</button>
     <button onclick="toggleChangePanel(false)" title="Close" style="font-size:15px">×</button>
   </div>
+  <div class="cp-scope">
+    <button id="chgScopeRoster" onclick="setChangeScope('roster')" title="Rotation, vacation, work over, training and Pilot Added changes">Roster</button>
+    <button id="chgScopeAll" onclick="setChangeScope('all')" title="Everything, including mission assignments">All changes</button>
+  </div>
   <div class="cp-body" id="chgBody"></div>
   <div class="cp-foot" id="chgFoot"></div>
 </div>
@@ -334,7 +350,7 @@ body.has-pilot-focus .p-row.pilot-focused .pname { font-weight:700; color:var(--
   <div class="leg"><input type="color" id="cc-proposedOn" style="width:14px;height:14px;border:none;padding:0;cursor:pointer;border-radius:2px" onchange="ROT_COLORS.proposedOn=this.value;saveRotColors();render()"> Proposed On</div>
   <div class="leg"><input type="color" id="cc-proposedOff" style="width:14px;height:14px;border:none;padding:0;cursor:pointer;border-radius:2px" onchange="ROT_COLORS.proposedOff=this.value;saveRotColors();render()"> Proposed Off</div>
   <div class="leg"><div class="lsw" style="background:var(--yellow)"></div> Cursor</div>
-  <span id="app-version" style="font-size:10px;opacity:.5;cursor:pointer;margin-left:4px;user-select:none">v4.15</span>
+  <span id="app-version" style="font-size:10px;opacity:.5;cursor:pointer;margin-left:4px;user-select:none">v4.16</span>
   <span id="legend-hint" style="margin-left:auto;font-size:10px">Add a note about 'Vacation' or 'Pilot Added' with the + Add Rotation button.</span>
 </div>
 
@@ -805,9 +821,23 @@ function chgUnread(){
   const seen = chgLastSeen();
   return chgVisible().filter(e => String(e.ts) > seen).length;
 }
+// Two tiers, one log (Will, 2026-09-17). 'roster' = the major changes Scheduling needs:
+// rotations, vacation, work over, training, Pilot Added, pilots joining/leaving.
+// 'detail' = mission assignments — recorded, but small and frequent, so shown only
+// under "All changes". Entries written before the Tier column existed derive it from kind.
+function chgTier(e){ return e.tier || (e.kind === 'assignment' ? 'detail' : 'roster'); }
+function chgScope(){
+  try { return localStorage.getItem('pp_chgScope') === 'all' ? 'all' : 'roster'; } catch (_) { return 'roster'; }
+}
+function setChangeScope(v){
+  try { localStorage.setItem('pp_chgScope', v === 'all' ? 'all' : 'roster'); } catch (_) {}
+  updateChangeBadge(); renderChangePanel();
+}
 function chgVisible(){
   const cutoff = new Date(Date.now() - CHG_WINDOW_DAYS*86400000).toISOString();
-  return CHANGELOG.filter(e => String(e.ts) >= cutoff);
+  const all = chgScope() === 'all';
+  // The badge follows the view: Scheduling isn't pinged for an assignment tweak.
+  return CHANGELOG.filter(e => String(e.ts) >= cutoff && (all || chgTier(e) === 'roster'));
 }
 function updateChangeBadge(){
   const el = document.getElementById('chgBadge');
@@ -847,6 +877,7 @@ function chgItemHTML(e, unread){
        + '<span class="cp-ic">' + k.icon + '</span><span>'
        + '<span class="cp-pilot">' + esc(e.pilot) + '</span> — ' + esc(e.summary)
        + (e.period ? ' <span class="cp-period">(' + esc(e.period) + ')</span>' : '')
+       + ' <span class="cp-by">· ' + esc(e.by || 'unknown') + '</span>'
        + '</span></div>';
 }
 
@@ -856,6 +887,9 @@ function chgItemHTML(e, unread){
 // visibly empties the list, which is the feedback the button was missing. The
 // history is still one click away, and nothing is ever deleted. (Will, 2026-08-24.)
 function renderChangePanel(){
+  const sc = chgScope();
+  document.getElementById('chgScopeRoster')?.classList.toggle('on', sc === 'roster');
+  document.getElementById('chgScopeAll')?.classList.toggle('on', sc === 'all');
   const body = document.getElementById('chgBody'), foot = document.getElementById('chgFoot');
   if (!body) return;
   const seen = chgLastSeen();
@@ -1431,7 +1465,8 @@ async function commitToAPI(attempt) {
     let chgEntries = [];
     try {
       chgEntries = diffRotations(JSON.parse(ORIGINAL_ROTATIONS || '[]'), chgSnapshot())
-        .concat(diffAssignments(ORIGINAL_ASSIGNMENTS, asgn));
+        .concat(diffAssignments(ORIGINAL_ASSIGNMENTS, asgn))
+        .map(e => Object.assign(e, {tier: chgTier(e), by: CHG_BY || ''}));
     } catch (e) {
       console.warn('Change log diff failed — committing without it:', e);
     }
@@ -1757,6 +1792,67 @@ function hideSaving(success){
   }
 }
 
+// ====== WHO'S SAVING ======
+// The planner has no logins — admin mode is a shared secret held by Will, Lisa, Michele
+// and Roberto. So each save asks who is making it and the change log records the answer.
+// Honour system, not security. The last choice is preselected so a normal save costs one
+// click, but it is asked EVERY time: a remembered name silently mislabels every save made
+// from a shared or borrowed laptop. "Other" takes a typed name for anyone unexpected.
+const CHG_EDITORS = ['Will Lawrence', 'Lisa le Roux', 'Michele Valenza', 'Roberto Piani'];
+let CHG_BY = '';
+
+function askWhoIsSaving(){
+  return new Promise(resolve => {
+    let last = '';
+    try { last = localStorage.getItem('pp_chgBy') || ''; } catch (_) {}
+    const esc = t => String(t).replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+    const isOther = last && !CHG_EDITORS.includes(last);
+    const ov = document.createElement('div');
+    ov.style.cssText = 'position:fixed;inset:0;z-index:100000;background:rgba(0,0,0,.55);display:flex;align-items:center;justify-content:center;padding:24px';
+    ov.innerHTML = `
+      <div style="background:var(--surface);color:var(--text);border:1px solid var(--border);border-radius:9px;max-width:320px;width:100%;box-shadow:0 12px 40px rgba(0,0,0,.45)">
+        <div style="padding:13px 15px 6px">
+          <div style="font-size:14px;font-weight:700">Who's saving?</div>
+          <div style="font-size:11px;color:var(--muted);margin-top:3px">Recorded against this change in the change log.</div>
+        </div>
+        <div style="padding:6px 15px">
+          ${CHG_EDITORS.map(n => `<label style="display:block;font-size:12px;padding:4px 0;cursor:pointer">
+            <input type="radio" name="whoSave" value="${esc(n)}" ${n === last ? 'checked' : ''}> ${esc(n)}</label>`).join('')}
+          <label style="display:block;font-size:12px;padding:4px 0;cursor:pointer">
+            <input type="radio" name="whoSave" value="__other" ${isOther ? 'checked' : ''}> Other</label>
+          <input id="whoOther" type="text" placeholder="Your name" value="${isOther ? esc(last) : ''}"
+            style="width:100%;margin-top:3px;font-size:12px;padding:5px 7px;border:1px solid var(--border);border-radius:5px;background:var(--bg);color:var(--text);${isOther ? '' : 'display:none'}">
+        </div>
+        <div style="padding:11px 15px;display:flex;gap:7px;border-top:1px solid var(--border);margin-top:6px">
+          <span style="flex:1"></span>
+          <button id="whoCancel" style="font-size:11px">Cancel</button>
+          <button id="whoOk" style="font-size:11px;font-weight:700;background:var(--teal);border-color:var(--teal);color:#fff">Save</button>
+        </div>
+      </div>`;
+    document.body.appendChild(ov);
+    const other = ov.querySelector('#whoOther');
+    const picked = () => ov.querySelector('input[name=whoSave]:checked');
+    ov.querySelectorAll('input[name=whoSave]').forEach(r => r.addEventListener('change', () => {
+      const o = picked() && picked().value === '__other';
+      other.style.display = o ? '' : 'none';
+      if (o) other.focus();
+    }));
+    const done = v => { document.removeEventListener('keydown', onKey); ov.remove(); resolve(v); };
+    const ok = () => {
+      const p = picked();
+      if (!p) { alert('Pick your name first.'); return; }
+      const name = p.value === '__other' ? other.value.trim() : p.value;
+      if (!name) { alert('Type your name.'); other.focus(); return; }
+      try { localStorage.setItem('pp_chgBy', name); } catch (_) {}
+      done(name);
+    };
+    const onKey = e => { if (e.key === 'Enter') { e.preventDefault(); ok(); } else if (e.key === 'Escape') done(null); };
+    document.addEventListener('keydown', onKey);
+    ov.querySelector('#whoOk').onclick = ok;
+    ov.querySelector('#whoCancel').onclick = () => done(null);
+  });
+}
+
 // ====== BUTTON HANDLERS ======
 async function commitChanges() {
   if (LOADED_FROM_CACHE || SHEET_REV === null) {
@@ -1768,6 +1864,10 @@ async function commitChanges() {
     return;
   }
   
+  const by = await askWhoIsSaving();
+  if (!by) return;              // cancelled: nothing saved, edits stay on screen
+  CHG_BY = by;
+
   const commitBtn = document.getElementById('commitBtn');
   commitBtn.disabled = true;
   showSaving();
@@ -3011,6 +3111,7 @@ function saveWorkoverPop(){
   render();
   // In normal (non-admin, non-simulate) mode, auto-commit to the sheet
   if(!adminMode && !simulateMode){
+    CHG_BY = 'Pilot request — ' + pilotName;   // a pilot's own request; no name prompt
     showSaving();
     commitToAPI()
       .then(res=>{

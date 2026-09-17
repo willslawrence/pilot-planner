@@ -12,7 +12,9 @@ const META_TAB = 'PlannerMeta';
 // deliberately unlike the four data tabs, whose clear-then-write is what
 // destroyed Lisa le Roux's and Dermot Fahy's rosters (2026-08-23/24).
 const CHANGELOG_TAB = 'ChangeLog';
-const CHANGELOG_HEADERS = ['Timestamp', 'Pilot', 'Kind', 'Period', 'Summary'];
+// Tier + By added 2026-09-17: 'roster' entries are what Scheduling sees by default,
+// 'detail' (mission assignments) only under the panel's All view; By is who saved.
+const CHANGELOG_HEADERS = ['Timestamp', 'Pilot', 'Kind', 'Period', 'Summary', 'Tier', 'By'];
 const CHANGELOG_RETAIN_DAYS = 90;
 
 function getChangeLogSheet_() {
@@ -26,6 +28,12 @@ function getChangeLogSheet_() {
  // into a real date and readAll hands the panel "2026-11-01T00:00:00.000Z".
  sh.getRange(1, 1, sh.getMaxRows(), CHANGELOG_HEADERS.length).setNumberFormat('@');
  }
+ // Tabs created before a column existed get its header written in place — the
+ // columns are positional, so a missing header would leave the data unlabelled.
+ const hdr = sh.getRange(1, 1, 1, CHANGELOG_HEADERS.length).getValues()[0];
+ if (CHANGELOG_HEADERS.some(function(h, i) { return hdr[i] !== h; })) {
+ sh.getRange(1, 1, 1, CHANGELOG_HEADERS.length).setValues([CHANGELOG_HEADERS]);
+ }
  return sh;
 }
 
@@ -35,7 +43,7 @@ function appendChangeLog_(entries) {
  if (!entries || !entries.length) return 0;
  const sh = getChangeLogSheet_();
  const rows = entries.map(function(e) {
- return [e.ts || new Date().toISOString(), e.pilot || '', e.kind || '', e.period || '', e.summary || ''];
+ return [e.ts || new Date().toISOString(), e.pilot || '', e.kind || '', e.period || '', e.summary || '', e.tier || '', e.by || ''];
  });
  const target = sh.getRange(sh.getLastRow() + 1, 1, rows.length, CHANGELOG_HEADERS.length);
  target.setNumberFormat('@'); // belt and braces for tabs created before the format was set
@@ -60,7 +68,7 @@ function readChangeLog_() {
  const last = sh.getLastRow();
  if (last < 2) return [];
  return sh.getRange(2, 1, last - 1, CHANGELOG_HEADERS.length).getValues().map(function(r) {
- return {ts: String(r[0]), pilot: r[1], kind: r[2], period: r[3], summary: r[4]};
+ return {ts: String(r[0]), pilot: r[1], kind: r[2], period: r[3], summary: r[4], tier: r[5], by: r[6]};
  }).filter(function(e) { return e.ts && e.summary; }); // tolerate blank rows left in the tab
 }
 
