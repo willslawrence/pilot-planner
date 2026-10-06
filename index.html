@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Pilot Planner v4.18 — THC H125</title>
+<title>Pilot Planner v4.19 — THC H125</title>
 <style>
 :root {
   --bg: #0f1123;
@@ -364,7 +364,7 @@ body.viewer-mode #chgBtn, body.viewer-mode #chgPanel { display:none !important; 
   <div class="leg"><input type="color" id="cc-proposedOn" style="width:14px;height:14px;border:none;padding:0;cursor:pointer;border-radius:2px" onchange="ROT_COLORS.proposedOn=this.value;saveRotColors();render()"> Proposed On</div>
   <div class="leg"><input type="color" id="cc-proposedOff" style="width:14px;height:14px;border:none;padding:0;cursor:pointer;border-radius:2px" onchange="ROT_COLORS.proposedOff=this.value;saveRotColors();render()"> Proposed Off</div>
   <div class="leg"><div class="lsw" style="background:var(--yellow)"></div> Cursor</div>
-  <span id="app-version" style="font-size:10px;opacity:.5;cursor:pointer;margin-left:4px;user-select:none">v4.18</span>
+  <span id="app-version" style="font-size:10px;opacity:.5;cursor:pointer;margin-left:4px;user-select:none">v4.19</span>
   <span id="legend-hint" style="margin-left:auto;font-size:10px">Add a note about 'Vacation' or 'Pilot Added' with the + Add Rotation button.</span>
 </div>
 
@@ -2910,6 +2910,12 @@ const SLOTS=[
   {name:'Slot 1 B2B', on:'2026-10-14'},
   {name:'Slot 2',     on:'2026-09-23'},
   {name:'Slot 2 B2B', on:'2026-11-04'},
+  // Slots 3 and 4 are Will's proposal (2026-10-06), one week apart after Slot 2, so P135
+  // pilots do not all change over on the same day. Not yet agreed with Crew Planning.
+  {name:'Slot 3',     on:'2026-09-30'},
+  {name:'Slot 3 B2B', on:'2026-11-11'},
+  {name:'Slot 4',     on:'2026-10-07'},
+  {name:'Slot 4 B2B', on:'2026-11-18'},
 ];
 const SLOTS_FROM=SLOTS.map(x=>x.on).sort()[0];   // slots mean nothing before the first one
 // Nearest slot to an ON start date. off = days late (+) or early (-); 0 = on the slot.
