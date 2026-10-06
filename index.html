@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Pilot Planner v4.19 — THC H125</title>
+<title>Pilot Planner v4.20 — THC H125</title>
 <style>
 :root {
   --bg: #0f1123;
@@ -144,9 +144,12 @@ body.hide-basemonth .duty-blk.base-month { display:none!important; }
 /* Roster slots (Crew Planning). A chip on each ON bar names the slot it starts on; a dashed
    line marks every slot changeover. Admin-only: hidden from viewers on the canvas too, not
    just in the header (hiding a control is not hiding the thing). */
-.slot-line { position:absolute; top:0; bottom:0; width:0; border-left:1px dashed rgba(123,31,162,.55); z-index:3; pointer-events:none; }
-html:not(.light) .slot-line { border-left-color:rgba(206,147,216,.6); }
+.slot-line { position:absolute; top:0; bottom:0; width:0; border-left:2px dashed rgba(123,31,162,.75); z-index:3; pointer-events:none; }
+.slot-line.proposed { border-left-color:rgba(233,30,140,.8); }
+html:not(.light) .slot-line { border-left-color:rgba(206,147,216,.8); }
+html:not(.light) .slot-line.proposed { border-left-color:rgba(255,105,180,.85); }
 .slot-chip { position:absolute; top:50%; transform:translateY(-50%); z-index:4; font-size:9px; font-weight:800; line-height:13px; padding:0 4px; border-radius:3px; white-space:nowrap; background:#6a1b9a; color:#fff; box-shadow:0 0 0 1px rgba(255,255,255,.55); cursor:default; }
+.slot-chip.proposed { background:#e91e8c; }
 .slot-chip.off-slot { background:#d32f2f; }
 body.hide-slots .slot-line, body.hide-slots .slot-chip, body.viewer-mode .slot-line, body.viewer-mode .slot-chip { display:none!important; }
 body:not(.hide-slots):not(.viewer-mode) .duty-blk.has-slot .rot-start { display:none; }
@@ -364,7 +367,7 @@ body.viewer-mode #chgBtn, body.viewer-mode #chgPanel { display:none !important; 
   <div class="leg"><input type="color" id="cc-proposedOn" style="width:14px;height:14px;border:none;padding:0;cursor:pointer;border-radius:2px" onchange="ROT_COLORS.proposedOn=this.value;saveRotColors();render()"> Proposed On</div>
   <div class="leg"><input type="color" id="cc-proposedOff" style="width:14px;height:14px;border:none;padding:0;cursor:pointer;border-radius:2px" onchange="ROT_COLORS.proposedOff=this.value;saveRotColors();render()"> Proposed Off</div>
   <div class="leg"><div class="lsw" style="background:var(--yellow)"></div> Cursor</div>
-  <span id="app-version" style="font-size:10px;opacity:.5;cursor:pointer;margin-left:4px;user-select:none">v4.19</span>
+  <span id="app-version" style="font-size:10px;opacity:.5;cursor:pointer;margin-left:4px;user-select:none">v4.20</span>
   <span id="legend-hint" style="margin-left:auto;font-size:10px">Add a note about 'Vacation' or 'Pilot Added' with the + Add Rotation button.</span>
 </div>
 
@@ -2912,10 +2915,10 @@ const SLOTS=[
   {name:'Slot 2 B2B', on:'2026-11-04'},
   // Slots 3 and 4 are Will's proposal (2026-10-06), one week apart after Slot 2, so P135
   // pilots do not all change over on the same day. Not yet agreed with Crew Planning.
-  {name:'Slot 3',     on:'2026-09-30'},
-  {name:'Slot 3 B2B', on:'2026-11-11'},
-  {name:'Slot 4',     on:'2026-10-07'},
-  {name:'Slot 4 B2B', on:'2026-11-18'},
+  {name:'Slot 3',     on:'2026-09-30', proposed:true},
+  {name:'Slot 3 B2B', on:'2026-11-11', proposed:true},
+  {name:'Slot 4',     on:'2026-10-07', proposed:true},
+  {name:'Slot 4 B2B', on:'2026-11-18', proposed:true},
 ];
 const SLOTS_FROM=SLOTS.map(x=>x.on).sort()[0];   // slots mean nothing before the first one
 // Nearest slot to an ON start date. off = days late (+) or early (-); 0 = on the slot.
@@ -2925,7 +2928,7 @@ function slotFor(s){
   for(const sl of SLOTS){
     let off=((dB(D(sl.on),D(s))%SLOT_PERIOD)+SLOT_PERIOD)%SLOT_PERIOD;
     if(off>SLOT_PERIOD/2) off-=SLOT_PERIOD;
-    if(!best||Math.abs(off)<Math.abs(best.off)) best={name:sl.name,off};
+    if(!best||Math.abs(off)<Math.abs(best.off)) best={name:sl.name,off,proposed:!!sl.proposed};
   }
   return best;
 }
@@ -2937,14 +2940,14 @@ function slotChip(p,r,rl,rw){
   const off=sl.off, txt=off===0?sl.name:`${sl.name} ${off>0?'+':'\u2212'}${Math.abs(off)}d`;
   const tip=off===0?`${p.name} \u2014 starts ${fmtDM(r.s)}, on ${sl.name}`
     :`${p.name} \u2014 starts ${fmtDM(r.s)}, ${Math.abs(off)} day${Math.abs(off)===1?'':'s'} ${off>0?'after':'before'} ${sl.name}`;
-  return `<div class="slot-chip${off===0?'':' off-slot'}" title="${tip.replace(/"/g,'&quot;')}" style="left:${rl+3}px">${txt}</div>`;
+  return `<div class="slot-chip${sl.proposed?' proposed':''}${off===0?'':' off-slot'}" title="${(tip+(sl.proposed?' (proposed slot)':'')).replace(/"/g,'&quot;')}" style="left:${rl+3}px">${txt}</div>`;
 }
 // One dashed line per slot changeover, painted in every pilot row.
 function slotLines(td){
   let html='';
   for(const sl of SLOTS){
     let d=dO(D(sl.on));
-    for(;d<td;d+=SLOT_PERIOD){ if(d>=0) html+=`<div class="slot-line" style="left:${d*DW}px"></div>`; }
+    for(;d<td;d+=SLOT_PERIOD){ if(d>=0) html+=`<div class="slot-line${sl.proposed?' proposed':''}" style="left:${d*DW}px"></div>`; }
   }
   return html;
 }
